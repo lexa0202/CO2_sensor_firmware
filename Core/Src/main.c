@@ -27,6 +27,7 @@
 
 #include "usbd_storage_if.h"
 #include "usb_manager.h"
+#include "lcd.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -98,23 +99,21 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_SDIO_SD_Init();
-  //HAL_SD_Init(&hsd);
-  //HAL_SD_GetCardInfo(&hsd, &sd_info);
-  //sd_initialized = true;
   MX_USART6_UART_Init();
   MX_FATFS_Init();
+  //MX_USB_DEVICE_Init();
   /* USER CODE BEGIN 2 */
   if (!SD_Init())
   {
 	  TxSDLen = snprintf(TxSD, sizeof(TxSD),
 			  "SD_Init_ERROR\n\r");
-	  HAL_Delay(10000);
+	  HAL_Delay(100);
 	  HAL_UART_Transmit(&huart6, TxSD, TxSDLen, HAL_MAX_DELAY);
   }
   else {
 	  TxSDLen = snprintf(TxSD, sizeof(TxSD),
 	  			  "SD_Init_OK\n\r");
-	  HAL_Delay(10000);
+	  HAL_Delay(100);
 	  HAL_UART_Transmit(&huart6, TxSD, TxSDLen, HAL_MAX_DELAY);
 	  TxSDLen = snprintf(TxSD, sizeof(TxSD),
 	            "\nSD-card info:\n\r"
@@ -130,8 +129,31 @@ int main(void)
 	  HAL_UART_Transmit(&huart6, TxSD, TxSDLen, HAL_MAX_DELAY);
   }
 
-    HAL_GPIO_WritePin(GPIOC,GPIO_PIN_0, SET);
   USB_Manager_Init();
+  HAL_GPIO_WritePin(GPIOC,GPIO_PIN_0, SET); // зажечь светодиодик
+  HAL_GPIO_WritePin(DISP_LED_GPIO_Port, DISP_LED_Pin, GPIO_PIN_RESET); // включить подсветку дисплея
+
+  HAL_GPIO_WritePin(DISP_RES_GPIO_Port, DISP_RES_Pin, GPIO_PIN_RESET);
+  HAL_Delay(20);
+  HAL_GPIO_WritePin(DISP_RES_GPIO_Port, DISP_RES_Pin, GPIO_PIN_SET);
+  HAL_Delay(150);
+  ILI9341_Init();
+
+  HAL_Delay(150);
+  ILI9341_Fill(0x0000);   // чёрный
+  HAL_Delay(2000);
+  ILI9341_Fill(0xFFFF);   // белый
+  HAL_Delay(2000);
+  ILI9341_Fill(0xF800);   // красный
+  HAL_Delay(2000);
+  ILI9341_Fill(0x07E0);   // зелёный
+  HAL_Delay(2000);
+  ILI9341_Fill(0x001F);   // синий
+  LCD_ReadID();
+  HAL_Delay(10000);   // время подключить UART
+ // HAL_Delay(10000);   // чтобы успеть прочитать
+
+
  // MX_USB_DEVICE_Init();
 
   /*
@@ -149,6 +171,7 @@ int main(void)
   while (1)
   {
 	  USB_Manager_Process();
+
 
 	  if (!USB_IsActive())
 	      {
@@ -282,25 +305,69 @@ static void MX_GPIO_Init(void)
   /* USER CODE END MX_GPIO_Init_1 */
 
   /* GPIO Ports Clock Enable */
+  __HAL_RCC_GPIOE_CLK_ENABLE();
   __HAL_RCC_GPIOH_CLK_ENABLE();
   __HAL_RCC_GPIOC_CLK_ENABLE();
+  __HAL_RCC_GPIOB_CLK_ENABLE();
   __HAL_RCC_GPIOD_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOE, DISP_D2_Pin|DISP_D3_Pin|DISP_D4_Pin|DISP_D5_Pin
+                          |DISP_D6_Pin|DISP_D7_Pin|DISP_D0_Pin|DISP_D1_Pin, GPIO_PIN_RESET);
 
-  /*Configure GPIO pin : LED_Pin */
-  GPIO_InitStruct.Pin = LED_Pin;
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOC, LED_Pin|DISP_LED_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOE, DISP_CS_Pin|DISP_WRX_Pin|DISP_RD_Pin|DISP_RES_Pin, GPIO_PIN_SET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(DISP_SCL_GPIO_Port, DISP_SCL_Pin, GPIO_PIN_SET);
+
+  /*Configure GPIO pins : DISP_D2_Pin DISP_D3_Pin DISP_D4_Pin DISP_D5_Pin
+                           DISP_D6_Pin DISP_D7_Pin DISP_CS_Pin DISP_D0_Pin
+                           DISP_D1_Pin */
+  GPIO_InitStruct.Pin = DISP_D2_Pin|DISP_D3_Pin|DISP_D4_Pin|DISP_D5_Pin
+                          |DISP_D6_Pin|DISP_D7_Pin|DISP_CS_Pin|DISP_D0_Pin
+                          |DISP_D1_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+  HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : LED_Pin DISP_LED_Pin */
+  GPIO_InitStruct.Pin = LED_Pin|DISP_LED_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(LED_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : DISP_WRX_Pin DISP_RD_Pin */
+  GPIO_InitStruct.Pin = DISP_WRX_Pin|DISP_RD_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+  HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : DISP_RES_Pin */
+  GPIO_InitStruct.Pin = DISP_RES_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(DISP_RES_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : DISP_SCL_Pin */
+  GPIO_InitStruct.Pin = DISP_SCL_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+  HAL_GPIO_Init(DISP_SCL_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pin : SDIO_CD_Pin */
   GPIO_InitStruct.Pin = SDIO_CD_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(SDIO_CD_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pin : USB_VBUS_Pin */
@@ -315,7 +382,6 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-
 
 
 /* USER CODE END 4 */

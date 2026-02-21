@@ -101,7 +101,7 @@ int main(void)
   MX_SDIO_SD_Init();
   MX_USART6_UART_Init();
   MX_FATFS_Init();
-  //MX_USB_DEVICE_Init();
+  MX_USB_DEVICE_Init();
   /* USER CODE BEGIN 2 */
   if (!SD_Init())
   {

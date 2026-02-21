@@ -20,7 +20,7 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "usbd_storage_if.h"
-#include "sd_manager.h"
+
 /* USER CODE BEGIN INCLUDE */
 
 /* USER CODE END INCLUDE */
@@ -63,7 +63,7 @@
   */
 
 #define STORAGE_LUN_NBR                  1
-//#define STORAGE_BLK_NBR                  0x10000
+#define STORAGE_BLK_NBR                  0x10000
 #define STORAGE_BLK_SIZ                  0x200
 
 /* USER CODE BEGIN PRIVATE_DEFINES */
@@ -263,6 +263,7 @@ int8_t STORAGE_Read_FS(uint8_t lun, uint8_t *buf, uint32_t blk_addr, uint16_t bl
 
   /* USER CODE END 6 */
 }
+
 /**
   * @brief  Writes data into the medium.
   * @param  lun: Logical unit number.

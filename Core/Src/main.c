@@ -47,6 +47,8 @@
 
 /* Private variables ---------------------------------------------------------*/
 SD_HandleTypeDef hsd;
+DMA_HandleTypeDef hdma_sdio_rx;
+DMA_HandleTypeDef hdma_sdio_tx;
 
 UART_HandleTypeDef huart6;
 
@@ -59,9 +61,17 @@ uint16_t TxSDLen;
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
+static void MX_DMA_Init(void);
 static void MX_SDIO_SD_Init(void);
 static void MX_USART6_UART_Init(void);
+
 /* USER CODE BEGIN PFP */
+static void Periph_Init(void);
+static void Storage_Init(void);
+static void Display_Init(void);
+static void USB_InitAndSync(void);
+static void App_Start(void);
+static void App_Task(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -97,72 +107,15 @@ int main(void)
   /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
-  MX_GPIO_Init();
-  MX_SDIO_SD_Init();
-  MX_USART6_UART_Init();
-  MX_FATFS_Init();
-  MX_USB_DEVICE_Init();
-  /* USER CODE BEGIN 2 */
-  if (!SD_Init())
-  {
-	  TxSDLen = snprintf(TxSD, sizeof(TxSD),
-			  "SD_Init_ERROR\n\r");
-	  HAL_Delay(100);
-	  HAL_UART_Transmit(&huart6, TxSD, TxSDLen, HAL_MAX_DELAY);
-  }
-  else {
-	  TxSDLen = snprintf(TxSD, sizeof(TxSD),
-	  			  "SD_Init_OK\n\r");
-	  HAL_Delay(100);
-	  HAL_UART_Transmit(&huart6, TxSD, TxSDLen, HAL_MAX_DELAY);
-	  TxSDLen = snprintf(TxSD, sizeof(TxSD),
-	            "\nSD-card info:\n\r"
-	            "Block size: %lu\n\r"
-	            "Block number: %lu\n\r"
-	            "Card size: %lu KB\n\r"
-	            "Card version: %d\n\r",
-	    		SD_GetBlockSize(),
-	    		SD_GetBlockCount(),
-	            (SD_GetBlockSize() * SD_GetBlockCount()) / 1024,
-	    		SD_GetCardVersion());
-
-	  HAL_UART_Transmit(&huart6, TxSD, TxSDLen, HAL_MAX_DELAY);
-  }
-
-  USB_Manager_Init();
-  HAL_GPIO_WritePin(GPIOC,GPIO_PIN_0, SET); // зажечь светодиодик
-  HAL_GPIO_WritePin(DISP_LED_GPIO_Port, DISP_LED_Pin, GPIO_PIN_RESET); // включить подсветку дисплея
-
-  HAL_GPIO_WritePin(DISP_RES_GPIO_Port, DISP_RES_Pin, GPIO_PIN_RESET);
-  HAL_Delay(20);
-  HAL_GPIO_WritePin(DISP_RES_GPIO_Port, DISP_RES_Pin, GPIO_PIN_SET);
-  HAL_Delay(150);
-  ILI9341_Init();
-
-  HAL_Delay(150);
-  ILI9341_Fill(0x0000);   // чёрный
-  HAL_Delay(2000);
-  ILI9341_Fill(0xFFFF);   // белый
-  HAL_Delay(2000);
-  ILI9341_Fill(0xF800);   // красный
-  HAL_Delay(2000);
-  ILI9341_Fill(0x07E0);   // зелёный
-  HAL_Delay(2000);
-  ILI9341_Fill(0x001F);   // синий
-  LCD_ReadID();
-  HAL_Delay(10000);   // время подключить UART
- // HAL_Delay(10000);   // чтобы успеть прочитать
 
 
- // MX_USB_DEVICE_Init();
+   /* USER CODE BEGIN 2 */
+  Periph_Init();
+  Storage_Init();
+  Display_Init();
+  USB_InitAndSync();
+  App_Start();
 
-  /*
-    if (f_mount(&SDFatFS, (TCHAR const*) SDPath, 0) != FR_OK) {
-  	  TxSDLen = snprintf(TxSD, sizeof (TxSD), "Unable to mount disk\r\n");
-  	  HAL_UART_Transmit_IT(&huart6, TxSD, TxSDLen);
-  	  Error_Handler();
-    }
-*/
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -171,15 +124,9 @@ int main(void)
   while (1)
   {
 	  USB_Manager_Process();
+	  App_Task();
 
-
-	  if (!USB_IsActive())
-	      {
-	          // здесь твоя логика:
-	          // чтение файлов
-	          // вывод на дисплей
-	      }
-    /* USER CODE END WHILE */
+	     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
   }
@@ -252,7 +199,7 @@ static void MX_SDIO_SD_Init(void)
   hsd.Init.ClockPowerSave = SDIO_CLOCK_POWER_SAVE_DISABLE;
   hsd.Init.BusWide = SDIO_BUS_WIDE_1B;
   hsd.Init.HardwareFlowControl = SDIO_HARDWARE_FLOW_CONTROL_DISABLE;
-  hsd.Init.ClockDiv = 8;
+  hsd.Init.ClockDiv = 4;
   /* USER CODE BEGIN SDIO_Init 2 */
 
   /* USER CODE END SDIO_Init 2 */
@@ -289,6 +236,25 @@ static void MX_USART6_UART_Init(void)
   /* USER CODE BEGIN USART6_Init 2 */
 
   /* USER CODE END USART6_Init 2 */
+
+}
+
+/**
+  * Enable DMA controller clock
+  */
+static void MX_DMA_Init(void)
+{
+
+  /* DMA controller clock enable */
+  __HAL_RCC_DMA2_CLK_ENABLE();
+
+  /* DMA interrupt init */
+  /* DMA2_Stream3_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA2_Stream3_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA2_Stream3_IRQn);
+  /* DMA2_Stream6_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA2_Stream6_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA2_Stream6_IRQn);
 
 }
 
@@ -382,8 +348,66 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+static void Periph_Init(void)
+{
+    MX_GPIO_Init();
+    MX_DMA_Init();
+    MX_SDIO_SD_Init();
+    MX_USART6_UART_Init();
+    MX_FATFS_Init();
+}
 
+static void Storage_Init(void)
+{
+    if (HAL_SD_Init(&hsd) != HAL_OK)
+        Error_Handler();
 
+    if (HAL_SD_ConfigWideBusOperation(&hsd, SDIO_BUS_WIDE_4B) != HAL_OK)
+        Error_Handler();
+
+    while (HAL_SD_GetCardState(&hsd) != HAL_SD_CARD_TRANSFER)
+    {
+    }
+
+    if (f_mount(&SDFatFS, "", 1) != FR_OK)
+        Error_Handler();
+}
+
+static void Display_Init(void)
+{
+
+    HAL_GPIO_WritePin(DISP_LED_GPIO_Port, DISP_LED_Pin, GPIO_PIN_RESET);
+    LCD_HardwareReset();
+    ILI9341_Init();
+}
+
+static void USB_InitAndSync(void)
+{
+    MX_USB_DEVICE_Init();
+
+    uint32_t t0 = HAL_GetTick();
+    while (HAL_GetTick() - t0 < 500)
+    {
+        USB_Manager_Process();
+    }
+}
+
+static void App_Start(void)
+{
+    if (USB_IsActive())
+    {
+        ILI9341_Fill(0x0000);  // MSC режим
+    }
+    else
+    {
+        ILI9341_DrawRawFromSD("IMAGE.RAW");
+    }
+}
+
+static void App_Task(void)
+{
+    // Здесь позже будет логика датчика, обновление экрана и т.д.
+}
 /* USER CODE END 4 */
 
 /**

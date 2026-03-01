@@ -1,49 +1,52 @@
 #include "lcd.h"
 #include "main.h"
+#include "fatfs.h"
+#include "ff.h"
+
+#define LCD_DATA_PORT GPIOE
+#define LCD_DATA_MASK 0x00FF   // PE0–PE7
 
 extern UART_HandleTypeDef huart6;
 
-static void LCD_SetData(uint8_t data)
+void LCD_HardwareReset(void)
 {
-    HAL_GPIO_WritePin(DISP_D0_GPIO_Port, DISP_D0_Pin, (data & 0x01) ? GPIO_PIN_SET : GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(DISP_D1_GPIO_Port, DISP_D1_Pin, (data & 0x02) ? GPIO_PIN_SET : GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(DISP_D2_GPIO_Port, DISP_D2_Pin, (data & 0x04) ? GPIO_PIN_SET : GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(DISP_D3_GPIO_Port, DISP_D3_Pin, (data & 0x08) ? GPIO_PIN_SET : GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(DISP_D4_GPIO_Port, DISP_D4_Pin, (data & 0x10) ? GPIO_PIN_SET : GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(DISP_D5_GPIO_Port, DISP_D5_Pin, (data & 0x20) ? GPIO_PIN_SET : GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(DISP_D6_GPIO_Port, DISP_D6_Pin, (data & 0x40) ? GPIO_PIN_SET : GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(DISP_D7_GPIO_Port, DISP_D7_Pin, (data & 0x80) ? GPIO_PIN_SET : GPIO_PIN_RESET);
+    DISP_RES_GPIO_Port->BSRR = (uint32_t)DISP_RES_Pin << 16;
+    HAL_Delay(20);
+    DISP_RES_GPIO_Port->BSRR = DISP_RES_Pin;
+    HAL_Delay(150);
+}
+static inline void LCD_SetData(uint8_t data)
+{
+    uint32_t clearMask = ((uint32_t)LCD_DATA_MASK) << 16;
+    LCD_DATA_PORT->BSRR = clearMask;        // очистить D0-D7
+    LCD_DATA_PORT->BSRR = data;             // установить нужные
 }
 
 
-static void LCD_WriteStrobe(void)
+static inline void LCD_WriteStrobe(void)
 {
-    HAL_GPIO_WritePin(DISP_WRX_GPIO_Port, DISP_WRX_Pin, GPIO_PIN_RESET);
-    __NOP(); __NOP();
-    HAL_GPIO_WritePin(DISP_WRX_GPIO_Port, DISP_WRX_Pin, GPIO_PIN_SET);
+	DISP_WRX_GPIO_Port->BSRR = (uint32_t)DISP_WRX_Pin << 16; // WR = 0
+	DISP_WRX_GPIO_Port->BSRR = DISP_WRX_Pin;                 // WR = 1
 }
 
 
 void LCD_WriteCommand(uint8_t cmd)
 {
-    HAL_GPIO_WritePin(DISP_CS_GPIO_Port, DISP_CS_Pin, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(DISP_SCL_GPIO_Port, DISP_SCL_Pin, GPIO_PIN_RESET); // D/C = 0 (command)
-
+    DISP_SCL_GPIO_Port->BSRR = (uint32_t)DISP_SCL_Pin << 16; // D/C=0
     LCD_SetData(cmd);
     LCD_WriteStrobe();
 
-    HAL_GPIO_WritePin(DISP_CS_GPIO_Port, DISP_CS_Pin, GPIO_PIN_SET);
 }
 
 void LCD_WriteData(uint8_t data)
 {
-    HAL_GPIO_WritePin(DISP_CS_GPIO_Port, DISP_CS_Pin, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(DISP_SCL_GPIO_Port, DISP_SCL_Pin, GPIO_PIN_SET); // D/C = 1 (data)
-
+	//!IMPORTANT!
+	//CS selected before
+    DISP_SCL_GPIO_Port->BSRR = DISP_SCL_Pin; // D/C=1
     LCD_SetData(data);
     LCD_WriteStrobe();
 
-    HAL_GPIO_WritePin(DISP_CS_GPIO_Port, DISP_CS_Pin, GPIO_PIN_SET);
+
 }
 
 static void LCD_SetDataInput(void)
@@ -107,7 +110,7 @@ void LCD_ReadID(void)
     LCD_SetData(0xD3);
     LCD_WriteStrobe();
 
-    // Data phase
+    // Data
     HAL_GPIO_WritePin(DISP_SCL_GPIO_Port, DISP_SCL_Pin, GPIO_PIN_SET);
     LCD_SetDataInput();
 
@@ -129,8 +132,9 @@ void LCD_ReadID(void)
 
 void ILI9341_Init(void)
 {
-    // Reset уже сделан
-
+    // IMPORTANT!
+	//Reset done before
+	LCD_Select();
     LCD_WriteCommand(0x01); // Software Reset
     HAL_Delay(100);
 
@@ -204,6 +208,8 @@ void ILI9341_Init(void)
 
     LCD_WriteCommand(0x29); // Display ON
     HAL_Delay(20);
+
+    LCD_Unselect();
 }
 
 void ILI9341_FillRed(void)
@@ -237,6 +243,7 @@ void ILI9341_Fill(uint16_t color)
     uint8_t high = color >> 8;
     uint8_t low  = color & 0xFF;
 
+    LCD_Select();
     // Column address set (0..239)
     LCD_WriteCommand(0x2A);
     LCD_WriteData(0x00);
@@ -254,11 +261,94 @@ void ILI9341_Fill(uint16_t color)
     // Memory write
     LCD_WriteCommand(0x2C);
 
-    // Заливка всего экрана
+    // fill all screen
+    DISP_SCL_GPIO_Port->BSRR = DISP_SCL_Pin; // D/C=1
+
     for (i = 0; i < 240UL * 320UL; i++)
     {
-        LCD_WriteData(high);
-        LCD_WriteData(low);
+        LCD_SetData(high);
+        LCD_WriteStrobe();
+
+        LCD_SetData(low);
+        LCD_WriteStrobe();
     }
+
+    LCD_Unselect();
+
 }
 
+static inline void LCD_Select(void)  		// CS = 0
+{
+    DISP_CS_GPIO_Port->BSRR = (uint32_t)DISP_CS_Pin << 16;
+}
+
+static inline void LCD_Unselect(void) 		// CS =1
+{
+    DISP_CS_GPIO_Port->BSRR = DISP_CS_Pin;
+}
+
+void ILI9341_DrawRawFromSD(const char* filename)
+{
+    FIL file;
+    UINT br;
+    uint8_t buffer[512];
+
+    // 1. Открытие файла
+    if (f_open(&file, filename, FA_READ) != FR_OK)
+    {
+        ILI9341_Fill(0xFFE0); // ЖЕЛТЫЙ = f_open ошибка
+        while(1);
+    }
+
+    // 2. Проверка размера
+    DWORD size = f_size(&file);
+
+    if (size != 240UL * 320UL * 2UL)
+    {
+        ILI9341_Fill(0x001F); // СИНИЙ = неверный размер
+        while(1);
+    }
+
+    // 3. Начало чтения
+    ILI9341_Fill(0x07E0); // ЗЕЛЕНЫЙ = файл читается
+
+    LCD_Select();
+
+    LCD_WriteCommand(0x2A);
+    LCD_WriteData(0x00);
+    LCD_WriteData(0x00);
+    LCD_WriteData(0x00);
+    LCD_WriteData(0xEF);
+
+    LCD_WriteCommand(0x2B);
+    LCD_WriteData(0x00);
+    LCD_WriteData(0x00);
+    LCD_WriteData(0x01);
+    LCD_WriteData(0x3F);
+
+    LCD_WriteCommand(0x2C);
+
+    DISP_SCL_GPIO_Port->BSRR = DISP_SCL_Pin;
+
+    while (1)
+    {
+        if (f_read(&file, buffer, sizeof(buffer), &br) != FR_OK)
+        {
+            ILI9341_Fill(0xF81F); // ФИОЛЕТОВЫЙ = f_read ошибка
+            while(1);
+        }
+
+        if (br == 0)
+            break;
+
+        for (uint16_t i = 0; i < br; i++)
+        {
+            LCD_SetData(buffer[i]);
+            LCD_WriteStrobe();
+        }
+    }
+
+    LCD_Unselect();
+    f_close(&file);
+
+    }

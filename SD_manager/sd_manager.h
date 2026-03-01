@@ -1,36 +1,34 @@
-#ifndef SD_MANAGER_H
-#define SD_MANAGER_H
+#ifndef __SD_MANAGER_H
+#define __SD_MANAGER_H
 
-#include <stdint.h>
-#include <stdbool.h>
+#include "stm32f4xx_hal.h"
+#include "stm32f4xx_hal_sd.h"
 
-/* Инициализация SD */
-bool SD_Init(void);
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-/* Деинициализация SD */
-void SD_DeInit(void);
+#define MSD_OK     0x00
+#define MSD_ERROR  0x01
 
-/* Проверка наличия карты */
-bool SD_IsInserted(void);
+uint8_t BSP_SD_Init(void);
 
-/* Ожидание готовности карты */
-bool SD_WaitReady(uint32_t timeout_ms);
+uint8_t BSP_SD_ReadBlocks(uint32_t *pData,
+                          uint32_t BlockAddr,
+                          uint32_t NumOfBlocks,
+                          uint32_t Timeout);
 
-/* Чтение блоков */
-bool SD_ReadBlocks(uint8_t *buf,
-                   uint32_t blk_addr,
-                   uint16_t blk_len);
+uint8_t BSP_SD_WriteBlocks(uint32_t *pData,
+                           uint32_t BlockAddr,
+                           uint32_t NumOfBlocks,
+                           uint32_t Timeout);
 
-/* Запись блоков */
-bool SD_WriteBlocks(uint8_t *buf,
-                    uint32_t blk_addr,
-                    uint16_t blk_len);
+uint8_t BSP_SD_GetCardState(void);
 
-/* Получить количество блоков */
-uint32_t SD_GetBlockCount(void);
+void BSP_SD_GetCardInfo(HAL_SD_CardInfoTypeDef *CardInfo);
 
-/* Размер блока (обычно 512) */
-uint32_t SD_GetBlockSize(void);
+#ifdef __cplusplus
+}
+#endif
 
-uint32_t SD_GetCardVersion(void);
 #endif

@@ -22,7 +22,7 @@
 #include "usbd_storage_if.h"
 
 /* USER CODE BEGIN INCLUDE */
-
+#include "sd_manager.h"
 /* USER CODE END INCLUDE */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -180,9 +180,6 @@ int8_t STORAGE_Init_FS(uint8_t lun)
 {
   /* USER CODE BEGIN 2 */
  UNUSED(lun);
-
- if (!SD_Init())
-     return USBD_FAIL;
  return USBD_OK;
   /* USER CODE END 2 */
 }
@@ -197,11 +194,15 @@ int8_t STORAGE_Init_FS(uint8_t lun)
 int8_t STORAGE_GetCapacity_FS(uint8_t lun, uint32_t *block_num, uint16_t *block_size)
 {
   /* USER CODE BEGIN 3 */
-  UNUSED(lun);
+    UNUSED(lun);
 
-  *block_num  = SD_GetBlockCount();
-  *block_size = 512;
-  return (USBD_OK);
+    HAL_SD_CardInfoTypeDef info;
+    BSP_SD_GetCardInfo(&info);
+
+    *block_num  = info.LogBlockNbr;
+    *block_size = info.LogBlockSize;
+
+    return USBD_OK;
   /* USER CODE END 3 */
 }
 
@@ -214,10 +215,7 @@ int8_t STORAGE_IsReady_FS(uint8_t lun)
 {
   /* USER CODE BEGIN 4 */
   UNUSED(lun);
-  if (!SD_IsInserted())
-      return USBD_FAIL;
-
-  if (!SD_WaitReady(100))
+  if (BSP_SD_GetCardState() != MSD_OK)
       return USBD_FAIL;
 
   return USBD_OK;
@@ -252,13 +250,14 @@ int8_t STORAGE_Read_FS(uint8_t lun, uint8_t *buf, uint32_t blk_addr, uint16_t bl
   UNUSED(lun);
   usb_busy = 1;
 
-  if (!SD_ReadBlocks(buf, blk_addr, blk_len))
+  if (BSP_SD_ReadBlocks((uint32_t*)buf,
+                        blk_addr,
+                        blk_len,
+                        1000) != MSD_OK)
   {
       usb_busy = 0;
       return USBD_FAIL;
   }
-
-  usb_busy = 0;
   return USBD_OK;
 
   /* USER CODE END 6 */
@@ -278,13 +277,14 @@ int8_t STORAGE_Write_FS(uint8_t lun, uint8_t *buf, uint32_t blk_addr, uint16_t b
   UNUSED(lun);
   usb_busy = 1;
 
-  if (!SD_WriteBlocks(buf, blk_addr, blk_len))
+  if (BSP_SD_WriteBlocks((uint32_t*)buf,
+                         blk_addr,
+                         blk_len,
+                         1000) != MSD_OK)
   {
       usb_busy = 0;
       return USBD_FAIL;
   }
-
-  usb_busy = 0;
   return USBD_OK;
   /* USER CODE END 7 */
 }

@@ -23,11 +23,10 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
-
-#include "usbd_storage_if.h"
-#include "usb_manager.h"
-#include "lcd.h"
+#include "usb_service.h"
+#include "storage_service.h"
+#include "screen_manager.h"
+#include "app.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -67,11 +66,6 @@ static void MX_USART6_UART_Init(void);
 
 /* USER CODE BEGIN PFP */
 static void Periph_Init(void);
-static void Storage_Init(void);
-static void Display_Init(void);
-static void USB_InitAndSync(void);
-static void App_Start(void);
-static void App_Task(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -111,10 +105,11 @@ int main(void)
 
    /* USER CODE BEGIN 2 */
   Periph_Init();
-  Storage_Init();
-  Display_Init();
-  USB_InitAndSync();
-  App_Start();
+
+  Screen_Init();
+  Storage_Service_Init();
+  USB_Service_Init();
+  App_Init();
 
   /* USER CODE END 2 */
 
@@ -123,8 +118,8 @@ int main(void)
 
   while (1)
   {
-	  USB_Manager_Process();
-	  App_Task();
+	  USB_Service_Process();
+	  App_Process();
 
 	     /* USER CODE END WHILE */
 
@@ -357,57 +352,6 @@ static void Periph_Init(void)
     MX_FATFS_Init();
 }
 
-static void Storage_Init(void)
-{
-    if (HAL_SD_Init(&hsd) != HAL_OK)
-        Error_Handler();
-
-    if (HAL_SD_ConfigWideBusOperation(&hsd, SDIO_BUS_WIDE_4B) != HAL_OK)
-        Error_Handler();
-
-    while (HAL_SD_GetCardState(&hsd) != HAL_SD_CARD_TRANSFER)
-    {
-    }
-
-    if (f_mount(&SDFatFS, "", 1) != FR_OK)
-        Error_Handler();
-}
-
-static void Display_Init(void)
-{
-
-    HAL_GPIO_WritePin(DISP_LED_GPIO_Port, DISP_LED_Pin, GPIO_PIN_RESET);
-    LCD_HardwareReset();
-    ILI9341_Init();
-}
-
-static void USB_InitAndSync(void)
-{
-    MX_USB_DEVICE_Init();
-
-    uint32_t t0 = HAL_GetTick();
-    while (HAL_GetTick() - t0 < 500)
-    {
-        USB_Manager_Process();
-    }
-}
-
-static void App_Start(void)
-{
-    if (USB_IsActive())
-    {
-        ILI9341_Fill(0x0000);  // MSC режим
-    }
-    else
-    {
-        ILI9341_DrawRawFromSD("IMAGE.RAW");
-    }
-}
-
-static void App_Task(void)
-{
-    // Здесь позже будет логика датчика, обновление экрана и т.д.
-}
 /* USER CODE END 4 */
 
 /**

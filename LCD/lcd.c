@@ -1,7 +1,6 @@
 #include "lcd.h"
 #include "main.h"
-#include "fatfs.h"
-#include "ff.h"
+
 
 #define LCD_DATA_PORT GPIOE
 #define LCD_DATA_MASK 0x00FF   // PE0–PE7
@@ -287,31 +286,8 @@ static inline void LCD_Unselect(void) 		// CS =1
     DISP_CS_GPIO_Port->BSRR = DISP_CS_Pin;
 }
 
-void ILI9341_DrawRawFromSD(const char* filename)
+void ILI9341_BeginFrame(void)
 {
-    FIL file;
-    UINT br;
-    uint8_t buffer[512];
-
-    // 1. Открытие файла
-    if (f_open(&file, filename, FA_READ) != FR_OK)
-    {
-        ILI9341_Fill(0xFFE0); // ЖЕЛТЫЙ = f_open ошибка
-        while(1);
-    }
-
-    // 2. Проверка размера
-    DWORD size = f_size(&file);
-
-    if (size != 240UL * 320UL * 2UL)
-    {
-        ILI9341_Fill(0x001F); // СИНИЙ = неверный размер
-        while(1);
-    }
-
-    // 3. Начало чтения
-    ILI9341_Fill(0x07E0); // ЗЕЛЕНЫЙ = файл читается
-
     LCD_Select();
 
     LCD_WriteCommand(0x2A);
@@ -329,26 +305,85 @@ void ILI9341_DrawRawFromSD(const char* filename)
     LCD_WriteCommand(0x2C);
 
     DISP_SCL_GPIO_Port->BSRR = DISP_SCL_Pin;
+}
 
-    while (1)
+void ILI9341_PushData(const uint8_t* data, uint32_t length)
+{
+    for (uint32_t i = 0; i < length; i++)
     {
-        if (f_read(&file, buffer, sizeof(buffer), &br) != FR_OK)
-        {
-            ILI9341_Fill(0xF81F); // ФИОЛЕТОВЫЙ = f_read ошибка
-            while(1);
-        }
+        LCD_SetData(data[i]);
+        LCD_WriteStrobe();
+    }
+}
 
-        if (br == 0)
-            break;
+void ILI9341_EndFrame(void)
+{
+    LCD_Unselect();
+}
 
-        for (uint16_t i = 0; i < br; i++)
-        {
-            LCD_SetData(buffer[i]);
-            LCD_WriteStrobe();
-        }
+void ILI9341_WriteLine(uint16_t y, const uint16_t* data)
+{
+    LCD_Select();
+
+    /* Column address (0..239) */
+    LCD_WriteCommand(0x2A);
+    LCD_WriteData(0x00);
+    LCD_WriteData(0x00);
+    LCD_WriteData(0x00);
+    LCD_WriteData(0xEF);
+
+    /* Page address (y..y) */
+    LCD_WriteCommand(0x2B);
+    LCD_WriteData((y >> 8) & 0xFF);
+    LCD_WriteData(y & 0xFF);
+    LCD_WriteData((y >> 8) & 0xFF);
+    LCD_WriteData(y & 0xFF);
+
+    /* Memory write */
+    LCD_WriteCommand(0x2C);
+    DISP_SCL_GPIO_Port->BSRR = DISP_SCL_Pin;
+
+    for (uint16_t x = 0; x < 240; x++)
+    {
+        uint16_t pixel = data[x];
+        LCD_SetData(pixel >> 8);
+        LCD_WriteStrobe();
+        LCD_SetData(pixel & 0xFF);
+        LCD_WriteStrobe();
     }
 
     LCD_Unselect();
-    f_close(&file);
+}
 
+void ILI9341_DrawImage(uint16_t x,
+                       uint16_t y,
+                       uint16_t w,
+                       uint16_t h,
+                       const uint8_t *data)
+{
+    LCD_Select();
+
+    LCD_WriteCommand(0x2A);
+    LCD_WriteData(x >> 8);
+    LCD_WriteData(x & 0xFF);
+    LCD_WriteData((x + w - 1) >> 8);
+    LCD_WriteData((x + w - 1) & 0xFF);
+
+    LCD_WriteCommand(0x2B);
+    LCD_WriteData(y >> 8);
+    LCD_WriteData(y & 0xFF);
+    LCD_WriteData((y + h - 1) >> 8);
+    LCD_WriteData((y + h - 1) & 0xFF);
+
+    LCD_WriteCommand(0x2C);
+
+    DISP_SCL_GPIO_Port->BSRR = DISP_SCL_Pin;
+
+    for (uint32_t i = 0; i < w * h * 2; i++)
+    {
+        LCD_SetData(data[i]);
+        LCD_WriteStrobe();
     }
+
+    LCD_Unselect();
+}

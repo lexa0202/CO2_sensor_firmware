@@ -89,6 +89,10 @@ void Error_Handler(void);
 #define SDIO_CD_GPIO_Port GPIOD
 #define USB_VBUS_Pin GPIO_PIN_8
 #define USB_VBUS_GPIO_Port GPIOA
+#define SCL_Pin GPIO_PIN_6
+#define SCL_GPIO_Port GPIOB
+#define SDA_Pin GPIO_PIN_7
+#define SDA_GPIO_Port GPIOB
 #define DISP_D0_Pin GPIO_PIN_0
 #define DISP_D0_GPIO_Port GPIOE
 #define DISP_D1_Pin GPIO_PIN_1

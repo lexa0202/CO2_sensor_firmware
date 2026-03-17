@@ -250,7 +250,7 @@ int8_t STORAGE_Read_FS(uint8_t lun, uint8_t *buf, uint32_t blk_addr, uint16_t bl
   UNUSED(lun);
   usb_busy = 1;
 
-  if (BSP_SD_ReadBlocks((uint32_t*)buf,
+  if (BSP_SD_ReadBlocks(buf,
                         blk_addr,
                         blk_len,
                         1000) != MSD_OK)
@@ -277,7 +277,7 @@ int8_t STORAGE_Write_FS(uint8_t lun, uint8_t *buf, uint32_t blk_addr, uint16_t b
   UNUSED(lun);
   usb_busy = 1;
 
-  if (BSP_SD_WriteBlocks((uint32_t*)buf,
+  if (BSP_SD_WriteBlocks(buf,
                          blk_addr,
                          blk_len,
                          1000) != MSD_OK)

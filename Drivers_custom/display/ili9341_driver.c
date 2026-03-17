@@ -1,4 +1,4 @@
-#include "lcd.h"
+#include <ili9341_driver.h>
 #include "main.h"
 
 
@@ -6,6 +6,9 @@
 #define LCD_DATA_MASK 0x00FF   // PE0–PE7
 
 extern UART_HandleTypeDef huart6;
+
+static inline void LCD_Select(void);
+static inline void LCD_Unselect(void);
 
 void LCD_HardwareReset(void)
 {
@@ -209,31 +212,6 @@ void ILI9341_Init(void)
     HAL_Delay(20);
 
     LCD_Unselect();
-}
-
-void ILI9341_FillRed(void)
-{
-    uint32_t i;
-
-    LCD_WriteCommand(0x2A); // Column address
-    LCD_WriteData(0x00);
-    LCD_WriteData(0x00);
-    LCD_WriteData(0x00);
-    LCD_WriteData(0xEF); // 239
-
-    LCD_WriteCommand(0x2B); // Page address
-    LCD_WriteData(0x00);
-    LCD_WriteData(0x00);
-    LCD_WriteData(0x01);
-    LCD_WriteData(0x3F); // 319
-
-    LCD_WriteCommand(0x2C); // Memory write
-
-    for (i = 0; i < 240*320; i++)
-    {
-        LCD_WriteData(0xF8); // Red high byte
-        LCD_WriteData(0x00); // Red low byte
-    }
 }
 
 void ILI9341_Fill(uint16_t color)

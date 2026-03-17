@@ -1,5 +1,5 @@
+#include <ili9341_driver.h>
 #include "animation_engine.h"
-#include "lcd.h"
 
 static uint32_t animationTimer = 0;
 static uint16_t color = 0x0000;

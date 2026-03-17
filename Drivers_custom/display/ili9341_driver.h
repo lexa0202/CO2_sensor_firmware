@@ -17,23 +17,14 @@
  */
 
 void LCD_HardwareReset(void);
+void ILI9341_Init(void);
+void ILI9341_WriteLine(uint16_t y, const uint16_t* data);
+void ILI9341_DrawImage(uint16_t x, uint16_t y, uint16_t w, uint16_t h, const uint8_t *data);
+void ILI9341_Fill(uint16_t color);
 void ILI9341_BeginFrame(void);
 void ILI9341_PushData(const uint8_t* data, uint32_t length);
 void ILI9341_EndFrame(void);
-void ILI9341_WriteLine(uint16_t y, const uint16_t* data);
-static inline void LCD_SetData(uint8_t data);
-static void LCD_WriteStrobe(void);
-void LCD_WriteCommand(uint8_t cmd);
-void LCD_WriteData(uint8_t data);
-static void LCD_SetDataInput(void);
-static void LCD_SetDataOutput(void);
-static uint8_t LCD_ReadByte(void);
-void LCD_ReadID(void);
-static inline void LCD_Select(void);
-static inline void LCD_Unselect(void);
-void ILI9341_Init(void);
-void ILI9341_FillRed(void);
-void ILI9341_Fill(uint16_t color);
+
 
 
 #endif

@@ -1,5 +1,5 @@
-#ifndef USB_ICON_H
-#define USB_ICON_H
+#ifndef USB_ICON_ASSET_H
+#define USB_ICON_ASSET_H
 
 #include <stdint.h>
 

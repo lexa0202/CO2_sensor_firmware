@@ -1,11 +1,13 @@
+#include <ili9341_driver.h>
 #include "screen_manager.h"
-#include "lcd.h"
 #include "storage_service.h"
 #include "ff.h"
 #include "animation_engine.h"
 #include "font16x24.h"
 #include "text_renderer.h"
 #include "usb_icon.h"
+#include "sensor_model.h"
+#include "power_service.h"
 
 #define SCREEN_TARGET_FPS   30
 #define FRAME_PERIOD_MS     (1000 / SCREEN_TARGET_FPS)
@@ -32,7 +34,9 @@ static uint8_t frameActive = 0;
 //FPS control
 static uint32_t frameTimer = 0;
 static uint8_t frameInProgress = 0;
-//usb_icon
+//sensor
+//const SensorData_t *data = SensorModel_Get();
+// power mode
 
 
 void Screen_Init(void)
@@ -106,13 +110,15 @@ void Screen_ShowUsb(void)
 
 void Screen_Process(void)
 {
+	 DeviceMode_t mode = Power_GetDeviceMode(); // get power mode
+	// If USB connect to PC
 	if (screenState == SCREEN_USB)
 	    {
 		if (usbScreenDrawn)
 		{
 		    return;
 		}
-		// Рассчитываем размеры блока
+		// Calc block size
 		uint16_t width1 = Text_GetStringWidth(usbLine1);
 		uint16_t width2 = Text_GetStringWidth(usbLine2);
 
@@ -127,16 +133,16 @@ void Screen_Process(void)
 
 		uint16_t blockHeight = FONT_HEIGHT * 2 + USB_LINE_SPACING;
 
-		 //Чуть выше центра
+		 //little higher center
 		uint16_t startY = (LCD_HEIGHT - blockHeight) / 2 - 20;
 
 		for (uint16_t y = 0; y < LCD_HEIGHT; y++)
 		{
-			 //Заливка фона
+			 //fill background
 			for (uint16_t x = 0; x < LCD_WIDTH; x++)
 				lineBuffer[x] = USB_BG_COLOR;
 
-			// Первая строка
+			// 1 line
 			if (y >= startY && y < startY + FONT_HEIGHT)
 			{
 				Text_DrawStringLine(
@@ -149,7 +155,7 @@ void Screen_Process(void)
 				);
 			}
 
-			// Вторая строка
+			// 2 line
 			if (y >= startY + FONT_HEIGHT + USB_LINE_SPACING &&
 				y < startY + FONT_HEIGHT * 2 + USB_LINE_SPACING)
 			{
@@ -165,6 +171,7 @@ void Screen_Process(void)
 
 			ILI9341_WriteLine(y, lineBuffer);
 		}
+		// usb icon
 		uint16_t iconX = (LCD_WIDTH - USB_ICON_W) / 2;
 
 		uint16_t iconY =
@@ -185,8 +192,8 @@ void Screen_Process(void)
 		return;
 	}
 
-
-    /* 1. Если нужно нарисовать RAW */
+	/* 2 RAW if USB not connected to PC*/
+    /* default RAW check SD */
     if (!defaultImageDrawn)
     {
         if (Storage_Service_IsAvailable())
@@ -196,14 +203,14 @@ void Screen_Process(void)
         }
     }
 
-    /* 2. Обработка RAW вывода */
+    // RAW
     if (screenState == SCREEN_DRAWING_RAW)
     {
         Screen_ProcessRaw();
         return;
     }
 
-    /* 4. Переход в режим анимации */
+    /* Animation ready */
     if (screenState == SCREEN_IDLE)
     {
         screenState = SCREEN_ANIMATING;
@@ -212,7 +219,7 @@ void Screen_Process(void)
         lastTick = HAL_GetTick();
     }
 
-    /* 5. Анимация */
+    /*  Animation process */
     if (screenState == SCREEN_ANIMATING)
     {
         uint32_t now = HAL_GetTick();
@@ -221,7 +228,7 @@ void Screen_Process(void)
 
         frameTimer += dt;
 
-        /* === Запуск нового кадра только по таймеру === */
+        /* === New screen by timer === */
         if (!frameInProgress)
         {
             if (frameTimer >= FRAME_PERIOD_MS)
@@ -235,11 +242,11 @@ void Screen_Process(void)
             }
             else
             {
-                return;  // ждём следующего тика
+                return;  // waiting next tick
             }
         }
 
-        /* === Рисуем одну строку за итерацию === */
+        /* === Paint 1 line for 1 cycle === */
         Animation_RenderLine(currentLine, lineBuffer);
         ILI9341_WriteLine(currentLine, lineBuffer);
 

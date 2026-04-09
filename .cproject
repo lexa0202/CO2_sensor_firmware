@@ -73,6 +73,12 @@
 									<listOptionValue builtIn="false" value="&quot;D:\Work\CO2 Progs\CO2_firmware\Services\sensors&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;D:\Work\CO2 Progs\CO2_firmware\Services\power&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;D:\Work\CO2 Progs\CO2_firmware\Services\debug&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;D:\Work\CO2 Progs\CO2_firmware\App\model&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;D:\Work\CO2 Progs\CO2_firmware\Drivers_custom\transport\esp_transport&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;D:\Work\CO2 Progs\CO2_firmware\Drivers_custom\transport&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;D:\Work\CO2 Progs\CO2_firmware\Services\wifi&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;D:\Work\CO2 Progs\CO2_firmware\Services\wifi\protocols&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;D:\Work\CO2 Progs\CO2_firmware\Services\time&quot;"/>
 								</option>
 								<inputType id="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.compiler.input.c.791069377" superClass="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.compiler.input.c"/>
 							</tool>

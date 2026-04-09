@@ -50,7 +50,7 @@ static void uart_clear_rx(void)
 
 /* --- init --- */
 
-void CO2_Init(void)
+void MHZ19C_Init(void)
 {
     warmup_start = HAL_GetTick();
 
@@ -60,7 +60,7 @@ void CO2_Init(void)
 
 /* --- прогрев датчика --- */
 
-int CO2_IsWarmedUp(void)
+int MHZ19C_IsWarmedUp(void)
 {
     if(HAL_GetTick() - warmup_start > 180000)
         return 1;
@@ -70,7 +70,7 @@ int CO2_IsWarmedUp(void)
 
 /* --- чтение CO2 --- */
 
-int CO2_Read(void)
+int MHZ19C_ReadCO2(void)
 {
     uart_clear_rx();
 
@@ -106,9 +106,17 @@ int CO2_Read(void)
 
 /* --- калибровка нуля --- */
 
-void CO2_CalibrateZero(void)
+void MHZ19C_CalibrateZero(void)
 {
     uart_clear_rx();
 
     HAL_UART_Transmit(&huart1,(uint8_t*)cmd_zero,9,100);
+}
+
+MHZ19C_Status_t MHZ19C_GetStatus(void)
+{
+    if(!MHZ19C_IsWarmedUp())
+        return MHZ19C_STATUS_WARMUP;
+
+    return MHZ19C_STATUS_OK;
 }

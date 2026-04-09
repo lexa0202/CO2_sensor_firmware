@@ -2,6 +2,7 @@
 #define SENSOR_MODEL_H
 
 #include <stdint.h>
+#include "sensor_types.h"
 
 typedef struct
 {
@@ -10,6 +11,7 @@ typedef struct
     float pressure;
 
     uint16_t co2;
+    SensorCO2_Status_t co2_status;
 
 } SensorData_t;
 

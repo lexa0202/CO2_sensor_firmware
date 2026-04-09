@@ -3,12 +3,20 @@
 
 #include <stdint.h>
 
-void CO2_Init(void);
+typedef enum
+{
+    MHZ19C_STATUS_WARMUP,
+    MHZ19C_STATUS_OK,
+    MHZ19C_STATUS_NO_RESPONSE,
+    MHZ19C_STATUS_OUT_OF_RANGE
+} MHZ19C_Status_t;
 
-int CO2_Read(void);
+void MHZ19C_Init(void);
 
-void CO2_CalibrateZero(void);
+int MHZ19C_ReadCO2(void);
 
-int CO2_IsWarmedUp(void);
+void MHZ19C_CalibrateZero(void);
+
+MHZ19C_Status_t MHZ19C_GetStatus(void);
 
 #endif

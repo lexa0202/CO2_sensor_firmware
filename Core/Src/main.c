@@ -34,6 +34,9 @@
 #include "app.h"
 #include "sensor_service.h"
 #include "power_service.h"
+#include "debug_console.h" // исключить позже
+#include "esp_transport.h" //удалить после отладки
+#include "wifi_manager.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -56,7 +59,6 @@
 /* USER CODE BEGIN PV */
 uint8_t TxSD[500];
 uint16_t TxSDLen;
-
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -98,26 +100,35 @@ int main(void)
   /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
+
   /* USER CODE BEGIN 2 */
   Periph_Init();
+  ESP_Transport_PowerOn();
+  ESP_Transport_Init();
   Power_Service_Init();
   Screen_Init();
   Storage_Service_Init();
   USB_Service_Init();
   Sensor_Service_Init();
   App_Init();
+  WIFI_Manager_Init();
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-
   while (1)
   {
 	  Power_Service_Process();
 	  USB_Service_Process();
 	  Sensor_Service_Process();
 	  App_Process();
+	  ESP_Transport_Process();
+	  WIFI_Manager_Process();
 
+	 /* if(ESP_Transport_GetLine(esp_line, sizeof(esp_line)))
+	  {
+	      Debug_Printf("ESP: %s\r\n", esp_line);
+	  }*/
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -129,6 +140,7 @@ int main(void)
   * @brief System Clock Configuration
   * @retval None
   */
+
 void SystemClock_Config(void)
 {
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
@@ -177,6 +189,7 @@ static void Periph_Init(void)
     MX_DMA_Init();
     MX_SDIO_SD_Init();
     MX_USART1_UART_Init();
+    MX_USART2_UART_Init();
     MX_USART6_UART_Init();
     MX_I2C1_Init();
     MX_FATFS_Init();

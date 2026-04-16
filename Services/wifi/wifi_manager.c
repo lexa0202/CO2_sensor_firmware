@@ -1,17 +1,12 @@
-#include "time_service.h"
 #include "wifi_manager.h"
+#include "tcp_client.h"
 #include "esp_at.h"
-//#include "debug_console.h" // delete after release
-#include <stdint.h>
+#include "time_service.h"
+#include <string.h>
 #include <stdio.h>
 
-#define WIFI_SSID     "Light Side"
-#define WIFI_PASS     "St@rW@rs_LightSide1"
-
-static uint32_t retry_timer = 0;
-static uint8_t retry_count = 0;
-static char wifi_ip[32] = {0};
-static uint8_t ip_retry_count = 0;
+#define WIFI_SSID "Light Side"
+#define WIFI_PASS "St@rW@rs_LightSide1"
 
 typedef enum
 {
@@ -20,16 +15,19 @@ typedef enum
     WIFI_STATE_WAIT_AT,
     WIFI_STATE_SET_MODE,
     WIFI_STATE_WAIT_MODE,
+    WIFI_STATE_SET_MUX,
+    WIFI_STATE_WAIT_MUX,
     WIFI_STATE_CONNECT,
     WIFI_STATE_WAIT_CONNECT,
-
-	WIFI_STATE_GET_IP,
-	WIFI_STATE_WAIT_IP,
+    WIFI_STATE_WAIT_IP,
     WIFI_STATE_READY,
     WIFI_STATE_ERROR
 } WifiState_t;
 
 static WifiState_t state = WIFI_STATE_IDLE;
+static uint32_t state_timer = 0;
+
+static char wifi_ip[32] = {0};
 
 void WIFI_Manager_Init(void)
 {
@@ -41,12 +39,8 @@ WIFI_Status_t WIFI_Manager_GetStatus(void)
 {
     switch(state)
     {
-        case WIFI_STATE_READY:
-            return WIFI_STATUS_CONNECTED;
-
-        case WIFI_STATE_ERROR:
-            return WIFI_STATUS_ERROR;
-
+        case WIFI_STATE_READY: return WIFI_STATUS_CONNECTED;
+        case WIFI_STATE_ERROR: return WIFI_STATUS_ERROR;
         case WIFI_STATE_AT:
         case WIFI_STATE_WAIT_AT:
         case WIFI_STATE_SET_MODE:
@@ -54,7 +48,6 @@ WIFI_Status_t WIFI_Manager_GetStatus(void)
         case WIFI_STATE_CONNECT:
         case WIFI_STATE_WAIT_CONNECT:
             return WIFI_STATUS_CONNECTING;
-
         default:
             return WIFI_STATUS_IDLE;
     }
@@ -69,76 +62,79 @@ void WIFI_Manager_Process(void)
 {
     ESP_AT_Process();
 
-    static uint32_t state_timer = 0;
-    ESP_AT_State_t resp = ESP_AT_GetState();   // ответы (OK / ERROR)
+    ESP_AT_State_t ev;
 
-    ESP_AT_State_t ev; // events 8 in line
+    static bool ok = false;
+    static bool error = false;
+    static bool ip_parsed = false;
+    static bool disconnected = false;
+    static bool wifi_connected = false;
+    static bool need_ip_request = false;
 
     while((ev = ESP_AT_GetEvent()) != ESP_AT_IDLE)
     {
-        if(ev == ESP_AT_EVENT_DISCONNECT && state == WIFI_STATE_READY)
-        {
-            wifi_ip[0] = '\0';
-            ESP_AT_Reset();
-            state = WIFI_STATE_ERROR;
-        }
+    	switch(ev)
+    	{
+    	    case ESP_AT_OK: ok = true; break;
+    	    case ESP_AT_ERROR: error = true; break;
 
-        if(ev == ESP_AT_EVENT_GOT_IP && state == WIFI_STATE_WAIT_CONNECT)
-        {
-            state = WIFI_STATE_GET_IP;
-        }
+    	    case ESP_AT_EVENT_GOT_IP:
+    	        need_ip_request = true;
+    	        break;
+    	    case ESP_AT_EVENT_IP_PARSED: ip_parsed = true; break;
+    	    case ESP_AT_EVENT_CONNECTED:
+    	        wifi_connected = true;
+    	        break;
 
-        if(ev == ESP_AT_EVENT_IP_PARSED && state == WIFI_STATE_WAIT_IP)
-        {
-            const char* ip = ESP_AT_GetIP();
+    	    case ESP_AT_EVENT_DISCONNECT:
+    	        wifi_connected = false;
+    	        disconnected = true;
+    	        break;
 
-            if(ip && ip[0] != '\0' && strcmp(ip, "0.0.0.0") != 0)
-            {
-                if(strcmp(wifi_ip, ip) != 0)
-                {
-                    strncpy(wifi_ip, ip, sizeof(wifi_ip) - 1);
-                    wifi_ip[sizeof(wifi_ip) - 1] = '\0';
-                }
+    	    default:
+    	        break;
+    	}
+    }
 
-                ip_retry_count = 0;
-                state = WIFI_STATE_READY;
-            }
-            else
-            {
-                state = WIFI_STATE_ERROR;
-            }
-        }
+    if(disconnected)
+    {
+        disconnected = false;
+        wifi_connected = false;
+        need_ip_request = false;
+        wifi_ip[0] = '\0';
+
+        state = WIFI_STATE_CONNECT;
     }
 
     switch(state)
     {
-        case WIFI_STATE_AT:
-            if(ESP_AT_Send("AT\r\n"))
-            {
-                state = WIFI_STATE_WAIT_AT;
-                state_timer = Time_GetMs();
-            }
-            break;
+		case WIFI_STATE_AT:
+			if(!ESP_AT_IsBusy() && ESP_AT_Send("AT\r\n"))
+			{
+				state = WIFI_STATE_WAIT_AT;
+				state_timer = Time_GetMs();
+			}
+			break;
 
         case WIFI_STATE_WAIT_AT:
-            if(resp == ESP_AT_OK)
+            if(ok)
             {
-                ESP_AT_Reset();
-                state = WIFI_STATE_SET_MODE;
+            	ok = false;
+            	state = WIFI_STATE_SET_MODE;
             }
-            else if(resp == ESP_AT_ERROR)
+            else if(error)
             {
-                ESP_AT_Reset();
-                state = WIFI_STATE_ERROR;
+            	error = false;
+                state = WIFI_STATE_AT;
             }
             else if(Time_GetMs() - state_timer > 2000)
             {
-                state = WIFI_STATE_ERROR;
+                state = WIFI_STATE_AT;
             }
             break;
 
         case WIFI_STATE_SET_MODE:
-            if(ESP_AT_Send("AT+CWMODE=1\r\n"))
+        	if(!ESP_AT_IsBusy() && ESP_AT_Send("AT+CWMODE=1\r\n"))
             {
                 state = WIFI_STATE_WAIT_MODE;
                 state_timer = Time_GetMs();
@@ -146,26 +142,49 @@ void WIFI_Manager_Process(void)
             break;
 
         case WIFI_STATE_WAIT_MODE:
-            if(resp == ESP_AT_OK)
+        	if(ok)
             {
-                ESP_AT_Reset();
-                state = WIFI_STATE_CONNECT;
+        		ok = false;
+        		state = WIFI_STATE_SET_MUX;
             }
-            else if(resp == ESP_AT_ERROR)
+            else if(error || Time_GetMs() - state_timer > 2000)
             {
-                ESP_AT_Reset();
-                state = WIFI_STATE_ERROR;
+            	error = false;
+            	state = WIFI_STATE_ERROR;
             }
-            else if(Time_GetMs() - state_timer > 2000)
+            break;
+
+        case WIFI_STATE_SET_MUX:
+        	if(!ESP_AT_IsBusy() && ESP_AT_Send("AT+CIPMUX=0\r\n"))
             {
-                state = WIFI_STATE_ERROR;
+                state = WIFI_STATE_WAIT_MUX;
+                state_timer = Time_GetMs();
+            }
+            break;
+
+        case WIFI_STATE_WAIT_MUX:
+        	if(ok)
+            {
+        		ok = false;
+        		state = WIFI_STATE_CONNECT;
+            }
+            else if(error || Time_GetMs() - state_timer > 2000)
+            {
+            	error = false;
+            	state = WIFI_STATE_ERROR;
             }
             break;
 
         case WIFI_STATE_CONNECT:
         {
-            char cmd[128];
+            if(wifi_connected)
+            {
+                // уже подключены → сразу ждём IP
+                state = WIFI_STATE_WAIT_CONNECT;
+                break;
+            }
 
+            char cmd[128];
             snprintf(cmd, sizeof(cmd),
                      "AT+CWJAP=\"%s\",\"%s\"\r\n",
                      WIFI_SSID, WIFI_PASS);
@@ -174,16 +193,20 @@ void WIFI_Manager_Process(void)
             {
                 state = WIFI_STATE_WAIT_CONNECT;
                 state_timer = Time_GetMs();
-                ip_retry_count = 0;
             }
             break;
         }
 
         case WIFI_STATE_WAIT_CONNECT:
-            if(resp == ESP_AT_ERROR)
+
+            if(need_ip_request && !ESP_AT_IsBusy())
             {
-                ESP_AT_Reset();
-                state = WIFI_STATE_ERROR;
+                if(ESP_AT_Send("AT+CIFSR\r\n"))
+                {
+                    need_ip_request = false;
+                    state = WIFI_STATE_WAIT_IP;
+                    state_timer = Time_GetMs();
+                }
             }
             else if(Time_GetMs() - state_timer > 30000)
             {
@@ -191,49 +214,47 @@ void WIFI_Manager_Process(void)
             }
             break;
 
-        case WIFI_STATE_GET_IP:
-            if(ESP_AT_Send("AT+CIFSR\r\n"))
-            {
-                state = WIFI_STATE_WAIT_IP;
-                state_timer = Time_GetMs();
-            }
-            break;
-
         case WIFI_STATE_WAIT_IP:
-            if(resp == ESP_AT_ERROR)
+            if(ip_parsed)
             {
-                state = WIFI_STATE_ERROR;
-            }
-            else if(Time_GetMs() - state_timer > 2000)
-            {
-                if(ip_retry_count < 3)
+                ip_parsed = false;
+
+                const char* ip = ESP_AT_GetIP();
+
+                if(ip && ip[0] != '\0')
                 {
-                    ip_retry_count++;
-                    state = WIFI_STATE_GET_IP;
+                    strncpy(wifi_ip, ip, sizeof(wifi_ip) - 1);
+                    wifi_ip[sizeof(wifi_ip) - 1] = '\0';
+
+                    state = WIFI_STATE_READY;
                 }
                 else
                 {
                     state = WIFI_STATE_ERROR;
                 }
             }
-            break;
-
-        case WIFI_STATE_READY:
-            // тут только удержание состояния
-            break;
-
-        case WIFI_STATE_ERROR:
-            if(Time_GetMs() - retry_timer > 5000)
+            else if(Time_GetMs() - state_timer > 2000)
             {
-                retry_timer = Time_GetMs();
-                retry_count++;
-
-                ESP_AT_Reset();
-                state = WIFI_STATE_AT;
+                state = WIFI_STATE_ERROR;
             }
             break;
 
+        case WIFI_STATE_ERROR:
         default:
             break;
+    }
+
+    if(state == WIFI_STATE_ERROR)
+    {
+        static uint32_t retry_timer = 0;
+
+        if(Time_GetMs() - retry_timer > 5000)
+        {
+            retry_timer = Time_GetMs();
+
+            // мягкий рестарт логики, НЕ ESP
+            ESP_AT_Reset();
+            state = WIFI_STATE_AT;
+        }
     }
 }

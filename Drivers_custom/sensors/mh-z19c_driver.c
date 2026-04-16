@@ -56,6 +56,13 @@ void MHZ19C_Init(void)
 
     /* датчик после включения игнорирует команды ~2 сек */
     HAL_Delay(2000);
+    static const uint8_t cmd_abc_off[9] =
+    {
+        0xFF,0x01,0x79,0x00,0x00,0x00,0x00,0x00,0x86
+    };
+
+    HAL_UART_Transmit(&huart1,(uint8_t*)cmd_abc_off,9,100);
+    HAL_Delay(100);
 }
 
 /* --- прогрев датчика --- */

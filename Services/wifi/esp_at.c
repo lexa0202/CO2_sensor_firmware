@@ -61,6 +61,12 @@ void ESP_AT_Reset(void)
     event_tail = 0;
     ip_addr[0] = '\0';
 }
+
+bool ESP_AT_IsBusy(void)
+{
+    return state == ESP_AT_WAIT_RESPONSE;
+}
+
 void ESP_AT_Process(void)
 {
     while(ESP_Transport_GetLine(line, sizeof(line)))
@@ -69,23 +75,29 @@ void ESP_AT_Process(void)
 
         if(strstr(line, "WIFI GOT IP"))
         {
-        	event_push(ESP_AT_EVENT_GOT_IP);
+            event_push(ESP_AT_EVENT_GOT_IP);
         }
         else if(strcmp(line, "OK") == 0)
         {
-            state = ESP_AT_OK;
-        }
-        else if(strstr(line, "WIFI DISCONNECT"))
-        {
-        	event_push(ESP_AT_EVENT_DISCONNECT);
+            state = ESP_AT_IDLE;          // 🔴 ВЕРНУТЬ!
+            event_push(ESP_AT_OK);
         }
         else if(strstr(line, "ERROR") || strstr(line, "FAIL"))
         {
-            state = ESP_AT_ERROR;
+            state = ESP_AT_IDLE;          // 🔴 ТОЖЕ!
+            event_push(ESP_AT_ERROR);
+        }
+        else if(strstr(line, "WIFI DISCONNECT"))
+        {
+            event_push(ESP_AT_EVENT_DISCONNECT);
+        }
+        else if(strstr(line, "busy"))
+        {
+            // TODO
         }
         else if(strstr(line, "WIFI CONNECTED"))
         {
-        	event_push(ESP_AT_EVENT_CONNECTED);
+            event_push(ESP_AT_EVENT_CONNECTED);
         }
         else if(strstr(line, "+CIFSR:STAIP"))
         {
@@ -105,20 +117,42 @@ void ESP_AT_Process(void)
                 }
             }
         }
+        // TCP CONNECT
+        else if(strcmp(line, "CONNECT") == 0)
+        {
+            event_push(ESP_AT_EVENT_TCP_CONNECT);
+        }
+        // TCP CLOSED
+        else if(strstr(line, "CLOSED"))
+        {
+            event_push(ESP_AT_EVENT_TCP_CLOSED);
+        }
+        else if(strchr(line, '>') != NULL)
+        {
+            event_push(ESP_AT_EVENT_SEND_PROMPT);
+        }
+        else if(strstr(line, "SEND OK"))
+        {
+            event_push(ESP_AT_EVENT_SEND_OK);
+        }
+        else if(strstr(line, "SEND FAIL"))
+        {
+            event_push(ESP_AT_EVENT_SEND_FAIL);
+        }
         else
         {
-            Debug_Printf("ESP EVT OVERFLOW\r\n");
+            // неизвестные строки игнорируем
         }
     }
 }
 
 bool ESP_AT_Send(const char* cmd)
 {
-	if(state == ESP_AT_WAIT_RESPONSE)
-	    return false;
+    if(state == ESP_AT_WAIT_RESPONSE)
+        return false;
 
-	ESP_Transport_Send(cmd);
-	state = ESP_AT_WAIT_RESPONSE;
+    ESP_Transport_Send(cmd);
+    state = ESP_AT_WAIT_RESPONSE;
 
     return true;
 }

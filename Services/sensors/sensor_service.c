@@ -149,15 +149,15 @@ void Sensor_Service_Process(void)
 
             if(hold_time >= CALIBRATION_HOLD_TIME)
             {
-            	if(MHZ19C_GetStatus() == MHZ19C_STATUS_OK && co2 > 350 && co2 < 600)
-                {
-                    MHZ19C_CalibrateZero();
-                    Debug_Printf("CAL: DONE\r\n");
-                }
-                else
-                {
-                    Debug_Printf("CAL: BLOCKED (warmup or env)\r\n");
-                }
+            	if(MHZ19C_GetStatus() == MHZ19C_STATUS_OK)
+            	{
+            	    MHZ19C_CalibrateZero();
+            	    Debug_Printf("CAL: FORCED DONE\r\n");
+            	}
+            	else
+            	{
+            	    Debug_Printf("CAL: BLOCKED (warmup)\r\n");
+            	}
 
                 cal_in_progress = 0; // сброс после выполнения
             }

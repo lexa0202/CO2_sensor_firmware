@@ -37,6 +37,7 @@
 #include "debug_console.h" // исключить позже
 #include "esp_transport.h" //удалить после отладки
 #include "wifi_manager.h"
+#include "tcp_client.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -112,6 +113,7 @@ int main(void)
   Sensor_Service_Init();
   App_Init();
   WIFI_Manager_Init();
+  TCP_Client_Init();
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -124,6 +126,7 @@ int main(void)
 	  App_Process();
 	  ESP_Transport_Process();
 	  WIFI_Manager_Process();
+	  TCP_Client_Process();
 
 	 /* if(ESP_Transport_GetLine(esp_line, sizeof(esp_line)))
 	  {

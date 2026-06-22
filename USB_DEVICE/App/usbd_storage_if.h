@@ -50,7 +50,6 @@
   */
 
 /* USER CODE BEGIN EXPORTED_DEFINES */
-bool USB_IsBusy(void);
 /* USER CODE END EXPORTED_DEFINES */
 
 /**

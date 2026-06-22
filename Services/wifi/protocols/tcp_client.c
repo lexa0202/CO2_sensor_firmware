@@ -1,6 +1,7 @@
 #include "tcp_client.h"
 #include "esp_at.h"
 #include "esp_transport.h"
+#include "esp_event_dispatcher.h"
 #include "time_service.h"
 #include <string.h>
 #include <stdio.h>
@@ -20,6 +21,7 @@ static bool cmd_sent = false;
 void TCP_Client_Init(void)
 {
     state = TCP_STATE_IDLE;
+    ESP_EventDispatcher_Register(TCP_Client_HandleEvent);
 }
 
 TCP_State_t TCP_Client_GetState(void)

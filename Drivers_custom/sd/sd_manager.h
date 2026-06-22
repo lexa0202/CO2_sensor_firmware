@@ -8,17 +8,14 @@
 extern "C" {
 #endif
 
-#define MSD_OK     0x00
-#define MSD_ERROR  0x01
-
 uint8_t BSP_SD_Init(void);
 
-uint8_t BSP_SD_ReadBlocks(uint8_t *pData,
+uint8_t BSP_SD_ReadBlocks(uint32_t *pData,
                           uint32_t BlockAddr,
                           uint32_t NumOfBlocks,
                           uint32_t Timeout);
 
-uint8_t BSP_SD_WriteBlocks(uint8_t *pData,
+uint8_t BSP_SD_WriteBlocks(uint32_t *pData,
                            uint32_t BlockAddr,
                            uint32_t NumOfBlocks,
                            uint32_t Timeout);

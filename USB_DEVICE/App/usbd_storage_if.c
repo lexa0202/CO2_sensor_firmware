@@ -23,6 +23,9 @@
 
 /* USER CODE BEGIN INCLUDE */
 #include "sd_manager.h"
+#include "storage_service.h"
+#include "main.h"
+#include "debug_console.h"
 /* USER CODE END INCLUDE */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -31,7 +34,11 @@
 
 /* USER CODE BEGIN PV */
 /* Private variables ---------------------------------------------------------*/
+#ifndef USBD_BUSY
+#define USBD_BUSY  2
+#endif
 
+static volatile uint8_t usb_storage_ready = 0;  // Флаг готовности SD для USB
 /* USER CODE END PV */
 
 /** @addtogroup STM32_USB_OTG_DEVICE_LIBRARY
@@ -129,8 +136,6 @@ extern USBD_HandleTypeDef hUsbDeviceFS;
 
 /* USER CODE BEGIN EXPORTED_VARIABLES */
 
-static volatile uint8_t usb_busy = 0;
-
 /* USER CODE END EXPORTED_VARIABLES */
 
 /**
@@ -151,6 +156,8 @@ static int8_t STORAGE_Write_FS(uint8_t lun, uint8_t *buf, uint32_t blk_addr, uin
 static int8_t STORAGE_GetMaxLun_FS(void);
 
 /* USER CODE BEGIN PRIVATE_FUNCTIONS_DECLARATION */
+volatile uint32_t g_lastReadTick = 0;
+volatile uint32_t g_readCounter = 0;
 
 /* USER CODE END PRIVATE_FUNCTIONS_DECLARATION */
 
@@ -170,7 +177,17 @@ USBD_StorageTypeDef USBD_Storage_Interface_fops_FS =
   (int8_t *)STORAGE_Inquirydata_FS
 };
 
+/* ============================================================
+ *   ФУНКЦИЯ ДЛЯ ВНЕШНЕГО УПРАВЛЕНИЯ ФЛАГОМ (ВЫЗЫВАЕТСЯ ИЗ usb_service.c)
+ * ============================================================ */
+
+void USB_Storage_SetReady(uint8_t ready)
+{
+    usb_storage_ready = ready;
+}
+
 /* Private functions ---------------------------------------------------------*/
+
 /**
   * @brief  Initializes the storage unit (medium) over USB FS IP
   * @param  lun: Logical unit number.
@@ -179,8 +196,8 @@ USBD_StorageTypeDef USBD_Storage_Interface_fops_FS =
 int8_t STORAGE_Init_FS(uint8_t lun)
 {
   /* USER CODE BEGIN 2 */
- UNUSED(lun);
- return USBD_OK;
+  UNUSED(lun);
+  return USBD_OK;
   /* USER CODE END 2 */
 }
 
@@ -196,11 +213,35 @@ int8_t STORAGE_GetCapacity_FS(uint8_t lun, uint32_t *block_num, uint16_t *block_
   /* USER CODE BEGIN 3 */
     UNUSED(lun);
 
-    HAL_SD_CardInfoTypeDef info;
-    BSP_SD_GetCardInfo(&info);
+    if (Storage_Service_GetOwner() != STORAGE_OWNER_USB)
+    {
+        return USBD_FAIL;
+    }
 
-    *block_num  = info.LogBlockNbr;
-    *block_size = info.LogBlockSize;
+    static HAL_SD_CardInfoTypeDef cachedInfo;
+    static uint8_t infoCached = 0;
+
+    if (!infoCached)
+    {
+        BSP_SD_GetCardInfo(&cachedInfo);
+
+        Debug_Printf(
+            "CACHE blocks=%lu size=%lu\r\n",
+            cachedInfo.LogBlockNbr,
+            cachedInfo.LogBlockSize
+        );
+
+        infoCached = 1;
+    }
+
+    if (cachedInfo.LogBlockNbr == 0 ||
+        cachedInfo.LogBlockSize == 0)
+    {
+        return USBD_FAIL;
+    }
+
+    *block_num  = cachedInfo.LogBlockNbr;
+    *block_size = cachedInfo.LogBlockSize;
 
     return USBD_OK;
   /* USER CODE END 3 */
@@ -215,10 +256,14 @@ int8_t STORAGE_IsReady_FS(uint8_t lun)
 {
   /* USER CODE BEGIN 4 */
   UNUSED(lun);
-  if (BSP_SD_GetCardState() != MSD_OK)
-      return USBD_FAIL;
 
-  return USBD_OK;
+      if (!usb_storage_ready)
+          return USBD_FAIL;
+
+      if (Storage_Service_GetOwner() != STORAGE_OWNER_USB)
+          return USBD_FAIL;
+
+      return USBD_OK;
   /* USER CODE END 4 */
 }
 
@@ -231,7 +276,6 @@ int8_t STORAGE_IsWriteProtected_FS(uint8_t lun)
 {
   /* USER CODE BEGIN 5 */
   UNUSED(lun);
-
   return (USBD_OK);
   /* USER CODE END 5 */
 }
@@ -248,20 +292,24 @@ int8_t STORAGE_Read_FS(uint8_t lun, uint8_t *buf, uint32_t blk_addr, uint16_t bl
 {
   /* USER CODE BEGIN 6 */
   UNUSED(lun);
-  usb_busy = 1;
 
-  if (BSP_SD_ReadBlocks(buf,
+  if (!usb_storage_ready ||
+      Storage_Service_GetOwner() != STORAGE_OWNER_USB)
+  {
+      return USBD_FAIL;
+  }
+
+  if (BSP_SD_ReadBlocks((uint32_t*)buf,
                         blk_addr,
                         blk_len,
                         1000) != MSD_OK)
   {
-      usb_busy = 0;
       return USBD_FAIL;
   }
-  return USBD_OK;
 
-  /* USER CODE END 6 */
+  return USBD_OK;
 }
+  /* USER CODE END 6 */
 
 /**
   * @brief  Writes data into the medium.
@@ -275,16 +323,17 @@ int8_t STORAGE_Write_FS(uint8_t lun, uint8_t *buf, uint32_t blk_addr, uint16_t b
 {
   /* USER CODE BEGIN 7 */
   UNUSED(lun);
-  usb_busy = 1;
 
-  if (BSP_SD_WriteBlocks(buf,
-                         blk_addr,
-                         blk_len,
-                         1000) != MSD_OK)
+  if (!usb_storage_ready ||
+      Storage_Service_GetOwner() != STORAGE_OWNER_USB)
   {
-      usb_busy = 0;
       return USBD_FAIL;
   }
+
+  if (BSP_SD_WriteBlocks((uint32_t*)buf, blk_addr, blk_len, 1000) != MSD_OK) {
+      return USBD_FAIL;
+  }
+
   return USBD_OK;
   /* USER CODE END 7 */
 }
@@ -302,10 +351,7 @@ int8_t STORAGE_GetMaxLun_FS(void)
 }
 
 /* USER CODE BEGIN PRIVATE_FUNCTIONS_IMPLEMENTATION */
-bool USB_IsBusy(void)
-{
-    return usb_busy;
-}
+
 /* USER CODE END PRIVATE_FUNCTIONS_IMPLEMENTATION */
 
 /**
@@ -315,4 +361,3 @@ bool USB_IsBusy(void)
 /**
   * @}
   */
-

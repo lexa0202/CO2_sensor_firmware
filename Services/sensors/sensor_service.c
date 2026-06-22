@@ -4,7 +4,6 @@
 
 #include "bme280_driver.h"
 #include "mh-z19c_driver.h"
-#include "sensor_types.h"
 
 #include "debug_console.h" // delete if don't use debug
 

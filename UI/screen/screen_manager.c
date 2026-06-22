@@ -47,6 +47,7 @@ void Screen_Init(void)
 	frameInProgress = 0;
     LCD_HardwareReset();
     ILI9341_Init();
+    ILI9341_Fill(0x0000);  // Черный фон, пока не загрузится изображение
 }
 
 void Screen_Black(void)
@@ -59,10 +60,14 @@ void Screen_ShowDefault(void)
 {
     screenState = SCREEN_IDLE;
     defaultImageDrawn = 0;
+    frameInProgress = 0;
+    currentLine = 0;
+    frameActive = 0;
 }
 
 static void Screen_StartRaw(const char* filename)
 {
+	ILI9341_Fill(0x0000); //очистка перед загрузкой
     if (Storage_Open(&rawFile, filename, FA_READ) != FR_OK)
     {
         ILI9341_Fill(0xFFE0);
@@ -82,6 +87,14 @@ static void Screen_StartRaw(const char* filename)
 
 static void Screen_ProcessRaw(void)
 {
+	// Если во время рисования RAW владение перехватил USB - аварийно завершаем
+	if (Storage_Service_GetOwner() != STORAGE_OWNER_APP) {
+		ILI9341_EndFrame();
+		Storage_Close(&rawFile);
+		screenState = SCREEN_IDLE;
+		return;
+	}
+
     if (Storage_Read(&rawFile, rawBuffer, sizeof(rawBuffer), &rawBytesRead) != FR_OK)
     {
         ILI9341_Fill(0xF81F);
@@ -106,11 +119,15 @@ void Screen_ShowUsb(void)
 {
     screenState = SCREEN_USB;
     usbScreenDrawn = 0;
+    frameInProgress = 0;
+    currentLine = 0;
+    frameActive = 0;
 }
 
 void Screen_Process(void)
 {
 	 DeviceMode_t mode = Power_GetDeviceMode(); // get power mode
+	 (void)mode;  // Подавляем warning о неиспользуемой переменной
 	// If USB connect to PC
 	if (screenState == SCREEN_USB)
 	    {

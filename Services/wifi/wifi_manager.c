@@ -1,5 +1,4 @@
 #include "wifi_manager.h"
-#include "tcp_client.h"
 #include "esp_at.h"
 #include "time_service.h"
 #include <string.h>

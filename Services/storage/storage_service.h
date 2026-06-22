@@ -21,5 +21,6 @@ bool Storage_Service_IsAvailable(void);
 FRESULT Storage_Open(FIL *file, const char *path, BYTE mode);
 FRESULT Storage_Read(FIL *file, void *buff, UINT btr, UINT *br);
 FRESULT Storage_Close(FIL *file);
+FRESULT Storage_CloseAll(void);  // Для принудительного закрытия всех файлов
 
 #endif

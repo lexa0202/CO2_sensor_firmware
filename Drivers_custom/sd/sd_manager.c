@@ -1,4 +1,5 @@
 #include "sd_manager.h"
+#include "bsp_driver_sd.h"
 #include "main.h"
 
 extern SD_HandleTypeDef hsd;
@@ -16,40 +17,46 @@ uint8_t BSP_SD_Init(void)
 }
 
 /* ==== READ ==== */
-uint8_t BSP_SD_ReadBlocks(uint8_t *pData,
+uint8_t BSP_SD_ReadBlocks(uint32_t *pData,
                           uint32_t BlockAddr,
                           uint32_t NumOfBlocks,
                           uint32_t Timeout)
 {
+    // Приводим uint32_t* к uint8_t* для HAL
     if (HAL_SD_ReadBlocks(&hsd,
-                          pData,
+                          (uint8_t*)pData,
                           BlockAddr,
                           NumOfBlocks,
                           Timeout) != HAL_OK)
         return MSD_ERROR;
 
+    // Ожидаем завершения операции
     while (HAL_SD_GetCardState(&hsd) != HAL_SD_CARD_TRANSFER)
     {
+        // Можно добавить таймаут, чтобы не зависнуть навсегда
     }
 
     return MSD_OK;
 }
 
 /* ==== WRITE ==== */
-uint8_t BSP_SD_WriteBlocks(uint8_t *pData,
+uint8_t BSP_SD_WriteBlocks(uint32_t *pData,
                            uint32_t BlockAddr,
                            uint32_t NumOfBlocks,
                            uint32_t Timeout)
 {
+    // Приводим uint32_t* к uint8_t* для HAL
     if (HAL_SD_WriteBlocks(&hsd,
-                           pData,
+                           (uint8_t*)pData,
                            BlockAddr,
                            NumOfBlocks,
                            Timeout) != HAL_OK)
         return MSD_ERROR;
 
+    // Ожидаем завершения операции
     while (HAL_SD_GetCardState(&hsd) != HAL_SD_CARD_TRANSFER)
     {
+        // Можно добавить таймаут, чтобы не зависнуть навсегда
     }
 
     return MSD_OK;

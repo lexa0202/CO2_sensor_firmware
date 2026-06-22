@@ -2,7 +2,6 @@
 #include "usb_service.h"
 #include "screen_manager.h"
 #include "wifi_manager.h"
-#include "tcp_client.h"
 #include "storage_service.h"
 #include "sensor_model.h"
 #include "debug_console.h"
@@ -15,6 +14,11 @@ static void App_EnterState(AppState_t newState)
 {
     previousState = currentState;
     currentState = newState;
+
+    // При уходе из USB-режима сообщаем USB-стеку, что SD больше не доступна
+    if (currentState != APP_STATE_USB_MSC && previousState == APP_STATE_USB_MSC) {
+        USB_Storage_SetReady(0);
+    }
 
     switch (currentState)
     {
@@ -89,59 +93,17 @@ static void App_DebugOutput(void)
         default: break;
     }
 
-    /* ===== TCP ===== */
-    TCP_State_t tcp = TCP_Client_GetState();
-
-    const char* tcp_str = "-";
-    switch(tcp)
-    {
-        case TCP_STATE_CONNECTING: tcp_str = "CONNECTING"; break;
-        case TCP_STATE_CONNECTED:  tcp_str = "CONNECTED"; break;
-        case TCP_STATE_SENDING:    tcp_str = "SENDING"; break;
-        case TCP_STATE_ERROR:      tcp_str = "ERROR"; break;
-        default: break;
-    }
 
     /* ===== OUTPUT ===== */
     Debug_Printf(
-        "T=%d.%02dC H=%d.%02d%% P=%d.%02dmmHg CO2=%s WIFI=%s IP=%s TCP=%s\r\n",
+        "T=%d.%02dC H=%d.%02d%% P=%d.%02dmmHg CO2=%s WIFI=%s IP=%s\r\n",
         t_i, t_f,
         h_i, h_f,
         p_i, p_f,
         co2_buffer,
         wifi_str,
-        ip,
-        tcp_str
+        ip
     );
-}
-
-static void App_TcpTest(void)
-{
-    static bool started = false;
-    static bool sent = false;
-
-    if(!started && WIFI_Manager_GetStatus() == WIFI_STATUS_CONNECTED)
-    {
-        if(TCP_Client_Connect("example.com", 80))
-        {
-            started = true;
-            Debug_Printf("TCP START\r\n");
-        }
-    }
-
-    if(started && !sent && TCP_Client_IsConnected())
-    {
-        const char *msg =
-            "GET / HTTP/1.1\r\n"
-            "Host: example.com\r\n"
-            "Connection: close\r\n\r\n";
-
-        if(TCP_Client_Send((const uint8_t*)msg, strlen(msg)))
-        {
-            sent = true;
-            Debug_Printf("TCP SEND\r\n");
-        }
-    }
 }
 
 void App_Process(void)
@@ -165,8 +127,6 @@ void App_Process(void)
             else
             {
                 Screen_Process();
-                TCP_Client_Process();
-                App_TcpTest();
                 App_DebugOutput();
             }
             break;

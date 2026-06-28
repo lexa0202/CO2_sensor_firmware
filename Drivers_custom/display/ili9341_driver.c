@@ -5,8 +5,6 @@
 #define LCD_DATA_PORT GPIOE
 #define LCD_DATA_MASK 0x00FF   // PE0–PE7
 
-extern UART_HandleTypeDef huart6;
-
 static inline void LCD_Select(void);
 static inline void LCD_Unselect(void);
 
@@ -49,87 +47,6 @@ void LCD_WriteData(uint8_t data)
     LCD_WriteStrobe();
 
 
-}
-
-static void LCD_SetDataInput(void)
-{
-    GPIO_InitTypeDef GPIO_InitStruct = {0};
-
-    GPIO_InitStruct.Pin = DISP_D0_Pin|DISP_D1_Pin|DISP_D2_Pin|DISP_D3_Pin|
-                          DISP_D4_Pin|DISP_D5_Pin|DISP_D6_Pin|DISP_D7_Pin;
-    GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-    GPIO_InitStruct.Pull = GPIO_NOPULL;
-
-    HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
-}
-
-static void LCD_SetDataOutput(void)
-{
-    GPIO_InitTypeDef GPIO_InitStruct = {0};
-
-    GPIO_InitStruct.Pin = DISP_D0_Pin|DISP_D1_Pin|DISP_D2_Pin|DISP_D3_Pin|
-                          DISP_D4_Pin|DISP_D5_Pin|DISP_D6_Pin|DISP_D7_Pin;
-    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-    GPIO_InitStruct.Pull = GPIO_NOPULL;
-    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
-
-    HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
-}
-
-static uint8_t LCD_ReadByte(void)
-{
-    uint8_t value = 0;
-
-    HAL_GPIO_WritePin(DISP_RD_GPIO_Port, DISP_RD_Pin, GPIO_PIN_RESET);
-    __NOP(); __NOP(); __NOP();
-
-    if (HAL_GPIO_ReadPin(DISP_D0_GPIO_Port, DISP_D0_Pin)) value |= 0x01;
-    if (HAL_GPIO_ReadPin(DISP_D1_GPIO_Port, DISP_D1_Pin)) value |= 0x02;
-    if (HAL_GPIO_ReadPin(DISP_D2_GPIO_Port, DISP_D2_Pin)) value |= 0x04;
-    if (HAL_GPIO_ReadPin(DISP_D3_GPIO_Port, DISP_D3_Pin)) value |= 0x08;
-    if (HAL_GPIO_ReadPin(DISP_D4_GPIO_Port, DISP_D4_Pin)) value |= 0x10;
-    if (HAL_GPIO_ReadPin(DISP_D5_GPIO_Port, DISP_D5_Pin)) value |= 0x20;
-    if (HAL_GPIO_ReadPin(DISP_D6_GPIO_Port, DISP_D6_Pin)) value |= 0x40;
-    if (HAL_GPIO_ReadPin(DISP_D7_GPIO_Port, DISP_D7_Pin)) value |= 0x80;
-
-    HAL_GPIO_WritePin(DISP_RD_GPIO_Port, DISP_RD_Pin, GPIO_PIN_SET);
-
-    return value;
-}
-
-void LCD_ReadID(void)
-{
-    uint8_t buffer[100];
-    uint16_t len;
-
-    uint8_t dummy, id1, id2, id3;
-
-    HAL_GPIO_WritePin(DISP_CS_GPIO_Port, DISP_CS_Pin, GPIO_PIN_RESET);
-
-    // Command
-    HAL_GPIO_WritePin(DISP_SCL_GPIO_Port, DISP_SCL_Pin, GPIO_PIN_RESET);
-    LCD_SetDataOutput();
-    LCD_SetData(0xD3);
-    LCD_WriteStrobe();
-
-    // Data
-    HAL_GPIO_WritePin(DISP_SCL_GPIO_Port, DISP_SCL_Pin, GPIO_PIN_SET);
-    LCD_SetDataInput();
-
-    dummy = LCD_ReadByte();
-    id1 = LCD_ReadByte();
-    id2 = LCD_ReadByte();
-    id3 = LCD_ReadByte();
-
-    HAL_GPIO_WritePin(DISP_CS_GPIO_Port, DISP_CS_Pin, GPIO_PIN_SET);
-
-    LCD_SetDataOutput();
-
-    len = snprintf((char*)buffer, sizeof(buffer),
-                   "LCD ID: %02X %02X %02X %02X\r\n",
-                   dummy, id1, id2, id3);
-
-    HAL_UART_Transmit(&huart6, buffer, len, HAL_MAX_DELAY);
 }
 
 void ILI9341_Init(void)

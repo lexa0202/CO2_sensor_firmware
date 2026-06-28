@@ -66,8 +66,6 @@ void Sensor_Service_Process(void)
                                &pressure);
 
     }
-
-
     /* --- CO2 (1 раз в 5 секунд)--- */
         /* период измерения CO2 может зависеть от режима устройства
                сейчас режим всегда NORMAL, но архитектура готова к батарее и режиму энергосбережения */
@@ -77,7 +75,6 @@ void Sensor_Service_Process(void)
                if(Power_GetDeviceMode() == DEVICE_MODE_BATTERY)
                    mhz19c_period = 15000;
             */
-
     if(now - lastMHZ19C >= mhz19c_period)
     {
         lastMHZ19C = now;
@@ -117,7 +114,6 @@ void Sensor_Service_Process(void)
     }
 
     /* ---- обновление модели ---- */
-
     SensorData_t data;
 
     data.temperature = temperature;
@@ -167,5 +163,3 @@ void Sensor_Service_Process(void)
         cal_in_progress = 0;
     }
 }
-
-

@@ -1,20 +1,49 @@
 #ifndef SCREEN_MANAGER_H
 #define SCREEN_MANAGER_H
 
-#include <stdint.h>
+/******************************************************************************
+ * Types
+ *****************************************************************************/
 
+/*
+ * Screen manager states.
+ */
 typedef enum
 {
-    SCREEN_IDLE = 0,
     SCREEN_DRAWING_RAW,
+    SCREEN_DASHBOARD,
     SCREEN_ANIMATING,
     SCREEN_USB
+
 } ScreenState_t;
 
+/******************************************************************************
+ * Public functions
+ *****************************************************************************/
+
+/*
+ * Initialize display subsystem.
+ */
 void Screen_Init(void);
+
+/*
+ * Main screen processing task.
+ */
 void Screen_Process(void);
+
+/*
+ * Show USB Mass Storage screen.
+ */
 void Screen_ShowUsb(void);
+
+/*
+ * Fill display with black color.
+ */
 void Screen_Black(void);
+
+/*
+ * Return to default application screen.
+ */
 void Screen_ShowDefault(void);
 
-#endif
+#endif /* SCREEN_MANAGER_H */

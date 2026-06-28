@@ -1,30 +1,93 @@
-#include <ili9341_driver.h>
+/******************************************************************************
+ * animation_engine.c
+ *
+ * Animation subsystem.
+ *
+ * Current implementation:
+ * - test animation
+ * - color cycling
+ *
+ * Future implementation:
+ * - CO2 character emotions
+ * - blinking eyes
+ * - dashboard effects
+ *
+ ******************************************************************************/
+
+/******************************************************************************
+ * Includes
+ *****************************************************************************/
+
 #include "animation_engine.h"
 
-static uint32_t animationTimer = 0;
-static uint16_t color = 0x0000;
+#include <ili9341_driver.h>
+
+/******************************************************************************
+ * Configuration
+ *****************************************************************************/
+
+/*
+ * Animation update period.
+ */
+#define COLOR_CHANGE_PERIOD_MS    1000U
+
+/*
+ * Test animation color step.
+ */
+#define COLOR_STEP                0x1111
+
+/******************************************************************************
+ * Static data
+ *****************************************************************************/
+
+static uint32_t animationTimer =
+    0;
+
+static uint16_t animationColor =
+    0x0000;
+
+/******************************************************************************
+ * Public functions
+ *****************************************************************************/
 
 void Animation_Init(void)
 {
-    animationTimer = 0;
-    color = 0x0000;
+    animationTimer =
+        0;
+
+    animationColor =
+        0x0000;
 }
 
-void Animation_Update(uint32_t dt_ms)
+void Animation_Update(
+    uint32_t dt_ms
+)
 {
-    animationTimer += dt_ms;
+    animationTimer +=
+        dt_ms;
 
-    if (animationTimer >= 1000)
+    if(animationTimer >=
+       COLOR_CHANGE_PERIOD_MS)
     {
         animationTimer = 0;
-        color += 0x1111;  // простая смена цвета
+
+        animationColor +=
+            COLOR_STEP;
     }
 }
 
-void Animation_RenderLine(uint16_t y, uint16_t* lineBuffer)
+void Animation_RenderLine(
+    uint16_t y,
+    uint16_t* lineBuffer
+)
 {
-    for (uint16_t x = 0; x < 240; x++)
+    (void)y;
+
+    for(uint16_t x = 0;
+        x < LCD_WIDTH;
+        x++)
     {
-        lineBuffer[x] = color;
+        lineBuffer[x] =
+            animationColor;
     }
 }

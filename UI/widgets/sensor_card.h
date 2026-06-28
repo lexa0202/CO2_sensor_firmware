@@ -1,15 +1,13 @@
-#ifndef APP_H
-#define APP_H
+#ifndef SENSOR_CARD_H
+#define SENSOR_CARD_H
 
 /******************************************************************************
- * app.h
+ * sensor_card.h
  *
- * Application state machine.
+ * Compact sensor information card.
  *
- * Responsible for:
- * - UI mode
- * - USB MSC mode
- * - application state transitions
+ * Used by dashboard screen to display
+ * temperature, humidity and pressure.
  *
  ******************************************************************************/
 
@@ -17,38 +15,37 @@
  * Includes
  *****************************************************************************/
 
-#include <stdbool.h>
 #include <stdint.h>
 
 /******************************************************************************
  * Types
  *****************************************************************************/
 
-typedef enum
+typedef struct
 {
-    APP_STATE_BOOT = 0,
-    APP_STATE_USB_MSC,
-    APP_STATE_UI
+    int16_t x;
+    int16_t y;
 
-} AppState_t;
+    uint16_t width;
+    uint16_t height;
+
+    uint16_t borderColor;
+    uint16_t backgroundColor;
+
+} SensorCard_t;
 
 /******************************************************************************
  * Public functions
  *****************************************************************************/
 
 /*
- * Initialize application.
+ * Render one scanline of a sensor card.
  */
-void App_Init(void);
+void SensorCard_RenderLine(
+    uint16_t y,
+    uint16_t* lineBuffer,
+    uint16_t lineWidth,
+    const SensorCard_t* card
+);
 
-/*
- * Main application task.
- */
-void App_Process(void);
-
-/*
- * Get current application state.
- */
-AppState_t App_GetState(void);
-
-#endif /* APP_H */
+#endif /* SENSOR_CARD_H */

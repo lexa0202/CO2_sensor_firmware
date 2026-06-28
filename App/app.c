@@ -93,7 +93,6 @@ static void App_DebugOutput(void)
         default: break;
     }
 
-
     /* ===== OUTPUT ===== */
     Debug_Printf(
         "T=%d.%02dC H=%d.%02d%% P=%d.%02dmmHg CO2=%s WIFI=%s IP=%s\r\n",

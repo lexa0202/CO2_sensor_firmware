@@ -1,278 +1,421 @@
-#include <ili9341_driver.h>
+/******************************************************************************
+ * screen_manager.c
+ *
+ * Main display manager.
+ *
+ * Responsibilities:
+ * - LCD initialization
+ * - RAW image rendering
+ * - Dashboard rendering
+ * - Animation rendering
+ * - USB screen handling
+ *
+ ******************************************************************************/
+
+/******************************************************************************
+ * Includes
+ *****************************************************************************/
+
 #include "screen_manager.h"
+
+#include <ili9341_driver.h>
+
 #include "storage_service.h"
-#include "ff.h"
 #include "animation_engine.h"
-#include "font16x24.h"
-#include "text_renderer.h"
-#include "usb_icon.h"
-#include "sensor_model.h"
 #include "power_service.h"
 
-#define SCREEN_TARGET_FPS   30
-#define FRAME_PERIOD_MS     (1000 / SCREEN_TARGET_FPS)
-// -------------text render------------------------
-#define USB_TEXT_COLOR   0xFFFF
-#define USB_BG_COLOR     0x0000
-#define USB_LINE_SPACING 6
-//-------------------------------------------------
-//text render
-static const char* usbLine1 = "USB is connected";
-static const char* usbLine2 = "to PC";
-//-------------------------------------------------
-static uint8_t defaultImageDrawn = 0;
-static uint8_t usbScreenDrawn = 0;
-static ScreenState_t screenState = SCREEN_IDLE;
+#include "screen_dashboard.h"
+#include "screen_usb.h"
+
+#include "ff.h"
+
+/******************************************************************************
+ * Configuration
+ *****************************************************************************/
+
+/*
+ * Animation frame rate.
+ */
+#define SCREEN_TARGET_FPS      30U
+#define FRAME_PERIOD_MS        (1000U / SCREEN_TARGET_FPS)
+
+/*
+ * Default splash image.
+ */
+#define DEFAULT_IMAGE_FILE     "IMAGE.RAW"
+
+/*
+ * Debug colors.
+ */
+#define COLOR_BLACK            0x0000
+#define COLOR_YELLOW           0xFFE0
+#define COLOR_BLUE             0x001F
+#define COLOR_MAGENTA          0xF81F
+
+/******************************************************************************
+ * Static data
+ *****************************************************************************/
+
+static ScreenState_t screenState =
+    SCREEN_DASHBOARD;
+
+static uint8_t defaultImageDrawn =
+    0;
+
+static uint8_t usbScreenDrawn =
+    0;
+
 static FIL rawFile;
+
 static uint8_t rawBuffer[512];
+
 static UINT rawBytesRead;
-// line-based rendering
+
 static uint16_t lineBuffer[LCD_WIDTH];
-static uint16_t currentLine = 0;
-static uint32_t lastTick = 0;
-static uint8_t frameActive = 0;
-//FPS control
-static uint32_t frameTimer = 0;
-static uint8_t frameInProgress = 0;
-//sensor
-//const SensorData_t *data = SensorModel_Get();
-// power mode
 
+static uint16_t currentLine =
+    0;
 
-void Screen_Init(void)
+static uint32_t lastTick =
+    0;
+
+static uint32_t frameTimer =
+    0;
+
+static uint8_t frameInProgress =
+    0;
+
+/******************************************************************************
+ * Private functions
+ *****************************************************************************/
+
+/*
+ * Start RAW image rendering.
+ */
+static void Screen_StartRaw(
+    const char* filename
+)
 {
-	Animation_Init();
-	lastTick = HAL_GetTick();
-	frameTimer = 0;
-	frameInProgress = 0;
-    LCD_HardwareReset();
-    ILI9341_Init();
-    ILI9341_Fill(0x0000);  // Черный фон, пока не загрузится изображение
-}
+    ILI9341_Fill(COLOR_BLACK);
 
-void Screen_Black(void)
-{
-    ILI9341_Fill(0x0000);
-    defaultImageDrawn = 0;
-}
-
-void Screen_ShowDefault(void)
-{
-    screenState = SCREEN_IDLE;
-    defaultImageDrawn = 0;
-    frameInProgress = 0;
-    currentLine = 0;
-    frameActive = 0;
-}
-
-static void Screen_StartRaw(const char* filename)
-{
-	ILI9341_Fill(0x0000); //очистка перед загрузкой
-    if (Storage_Open(&rawFile, filename, FA_READ) != FR_OK)
+    if(Storage_Open(
+           &rawFile,
+           filename,
+           FA_READ) != FR_OK)
     {
-        ILI9341_Fill(0xFFE0);
+        ILI9341_Fill(COLOR_YELLOW);
         return;
     }
 
-    if (f_size(&rawFile) != LCD_WIDTH * LCD_HEIGHT * 2UL)
+    if(f_size(&rawFile) !=
+       LCD_WIDTH *
+       LCD_HEIGHT *
+       2UL)
     {
-        ILI9341_Fill(0x001F);
-        Storage_Close(&rawFile);
+        ILI9341_Fill(COLOR_BLUE);
+
+        Storage_Close(
+            &rawFile
+        );
+
         return;
     }
 
     ILI9341_BeginFrame();
-    screenState = SCREEN_DRAWING_RAW;
+
+    screenState =
+        SCREEN_DRAWING_RAW;
 }
 
+/*
+ * Continue RAW image rendering.
+ */
 static void Screen_ProcessRaw(void)
 {
-	// Если во время рисования RAW владение перехватил USB - аварийно завершаем
-	if (Storage_Service_GetOwner() != STORAGE_OWNER_APP) {
-		ILI9341_EndFrame();
-		Storage_Close(&rawFile);
-		screenState = SCREEN_IDLE;
-		return;
-	}
-
-    if (Storage_Read(&rawFile, rawBuffer, sizeof(rawBuffer), &rawBytesRead) != FR_OK)
+    /*
+     * Abort if storage ownership
+     * was taken by USB.
+     */
+    if(Storage_Service_GetOwner() !=
+       STORAGE_OWNER_APP)
     {
-        ILI9341_Fill(0xF81F);
         ILI9341_EndFrame();
-        Storage_Close(&rawFile);
-        screenState = SCREEN_IDLE;
+
+        Storage_Close(
+            &rawFile
+        );
+
+        screenState =
+            SCREEN_DASHBOARD;
+
         return;
     }
 
-    if (rawBytesRead == 0)
+    if(Storage_Read(
+           &rawFile,
+           rawBuffer,
+           sizeof(rawBuffer),
+           &rawBytesRead) != FR_OK)
     {
+        ILI9341_Fill(
+            COLOR_MAGENTA
+        );
+
         ILI9341_EndFrame();
-        Storage_Close(&rawFile);
-        screenState = SCREEN_IDLE;
+
+        Storage_Close(
+            &rawFile
+        );
+
+        screenState =
+            SCREEN_DASHBOARD;
+
         return;
     }
 
-    ILI9341_PushData(rawBuffer, rawBytesRead);
+    if(rawBytesRead == 0)
+    {
+        ILI9341_EndFrame();
+
+        Storage_Close(
+            &rawFile
+        );
+
+        screenState =
+            SCREEN_DASHBOARD;
+
+        return;
+    }
+
+    ILI9341_PushData(
+        rawBuffer,
+        rawBytesRead
+    );
+}
+
+/*
+ * Render one dashboard line.
+ */
+static void Screen_ProcessDashboard(void)
+{
+    ScreenDashboard_RenderLine(
+        currentLine,
+        lineBuffer,
+        LCD_WIDTH
+    );
+
+    ILI9341_WriteLine(
+        currentLine,
+        lineBuffer
+    );
+
+    currentLine++;
+
+    if(currentLine >= LCD_HEIGHT)
+    {
+        currentLine = 0;
+
+        ScreenDashboard_Update();
+    }
+}
+
+/*
+ * Render one animation line.
+ */
+static void Screen_ProcessAnimation(void)
+{
+    uint32_t now =
+        HAL_GetTick();
+
+    uint32_t dt =
+        now - lastTick;
+
+    lastTick =
+        now;
+
+    frameTimer += dt;
+
+    if(!frameInProgress)
+    {
+        if(frameTimer >=
+           FRAME_PERIOD_MS)
+        {
+            frameTimer -=
+                FRAME_PERIOD_MS;
+
+            Animation_Update(
+                FRAME_PERIOD_MS
+            );
+
+            currentLine = 0;
+
+            frameInProgress = 1;
+        }
+        else
+        {
+            return;
+        }
+    }
+
+    Animation_RenderLine(
+        currentLine,
+        lineBuffer
+    );
+
+    ILI9341_WriteLine(
+        currentLine,
+        lineBuffer
+    );
+
+    currentLine++;
+
+    if(currentLine >= LCD_HEIGHT)
+    {
+        frameInProgress = 0;
+    }
+}
+
+/******************************************************************************
+ * Public functions
+ *****************************************************************************/
+
+void Screen_Init(void)
+{
+    Animation_Init();
+
+    lastTick =
+        HAL_GetTick();
+
+    frameTimer =
+        0;
+
+    frameInProgress =
+        0;
+
+    LCD_HardwareReset();
+
+    ILI9341_Init();
+
+    ILI9341_Fill(
+        COLOR_BLACK
+    );
+}
+
+void Screen_Black(void)
+{
+    ILI9341_Fill(
+        COLOR_BLACK
+    );
+
+    defaultImageDrawn =
+        0;
+
+    currentLine =
+        0;
+
+    frameInProgress =
+        0;
+}
+
+void Screen_ShowDefault(void)
+{
+    screenState =
+        SCREEN_DASHBOARD;
+
+    defaultImageDrawn =
+        0;
+
+    usbScreenDrawn =
+        0;
+
+    frameInProgress =
+        0;
+
+    currentLine =
+        0;
 }
 
 void Screen_ShowUsb(void)
 {
-    screenState = SCREEN_USB;
-    usbScreenDrawn = 0;
-    frameInProgress = 0;
-    currentLine = 0;
-    frameActive = 0;
+    screenState =
+        SCREEN_USB;
+
+    usbScreenDrawn =
+        0;
+
+    frameInProgress =
+        0;
+
+    currentLine =
+        0;
 }
 
 void Screen_Process(void)
 {
-	 DeviceMode_t mode = Power_GetDeviceMode(); // get power mode
-	 (void)mode;  // Подавляем warning о неиспользуемой переменной
-	// If USB connect to PC
-	if (screenState == SCREEN_USB)
-	    {
-		if (usbScreenDrawn)
-		{
-		    return;
-		}
-		// Calc block size
-		uint16_t width1 = Text_GetStringWidth(usbLine1);
-		uint16_t width2 = Text_GetStringWidth(usbLine2);
+    DeviceMode_t mode =
+        Power_GetDeviceMode();
 
-		int16_t startX1 = (LCD_WIDTH - width1) / 2;
-		int16_t startX2 = (LCD_WIDTH - width2) / 2;
+    (void)mode;
 
-		if (startX1 < 0)
-			startX1 = 0;
-
-		if (startX2 < 0)
-			startX2 = 0;
-
-		uint16_t blockHeight = FONT_HEIGHT * 2 + USB_LINE_SPACING;
-
-		 //little higher center
-		uint16_t startY = (LCD_HEIGHT - blockHeight) / 2 - 20;
-
-		for (uint16_t y = 0; y < LCD_HEIGHT; y++)
-		{
-			 //fill background
-			for (uint16_t x = 0; x < LCD_WIDTH; x++)
-				lineBuffer[x] = USB_BG_COLOR;
-
-			// 1 line
-			if (y >= startY && y < startY + FONT_HEIGHT)
-			{
-				Text_DrawStringLine(
-					y - startY,
-					lineBuffer,
-					LCD_WIDTH,
-					usbLine1,
-					startX1,
-					USB_TEXT_COLOR
-				);
-			}
-
-			// 2 line
-			if (y >= startY + FONT_HEIGHT + USB_LINE_SPACING &&
-				y < startY + FONT_HEIGHT * 2 + USB_LINE_SPACING)
-			{
-				Text_DrawStringLine(
-					y - (startY + FONT_HEIGHT + USB_LINE_SPACING),
-					lineBuffer,
-					LCD_WIDTH,
-					usbLine2,
-					startX2,
-					USB_TEXT_COLOR
-				);
-			}
-
-			ILI9341_WriteLine(y, lineBuffer);
-		}
-		// usb icon
-		uint16_t iconX = (LCD_WIDTH - USB_ICON_W) / 2;
-
-		uint16_t iconY =
-			startY +
-			FONT_HEIGHT * 2 +
-			USB_LINE_SPACING;
-
-		ILI9341_DrawImage(
-			iconX,
-			iconY,
-			USB_ICON_W,
-			USB_ICON_H,
-			usb_icon
-		);
-
-
-		usbScreenDrawn = 1;
-		return;
-	}
-
-	/* 2 RAW if USB not connected to PC*/
-    /* default RAW check SD */
-    if (!defaultImageDrawn)
+    /*
+     * USB screen.
+     */
+    if(screenState ==
+       SCREEN_USB)
     {
-        if (Storage_Service_IsAvailable())
+        if(!usbScreenDrawn)
         {
-            Screen_StartRaw("IMAGE.RAW");
-            defaultImageDrawn = 1;
+            ScreenUsb_Draw();
+
+            usbScreenDrawn =
+                1;
+        }
+
+        return;
+    }
+
+    /*
+     * Splash image.
+     */
+    if(!defaultImageDrawn)
+    {
+        if(Storage_Service_IsAvailable())
+        {
+            Screen_StartRaw(
+                DEFAULT_IMAGE_FILE
+            );
+
+            defaultImageDrawn =
+                1;
         }
     }
 
-    // RAW
-    if (screenState == SCREEN_DRAWING_RAW)
+    /*
+     * RAW rendering.
+     */
+    if(screenState ==
+       SCREEN_DRAWING_RAW)
     {
         Screen_ProcessRaw();
         return;
     }
 
-    /* Animation ready */
-    if (screenState == SCREEN_IDLE)
+    /*
+     * Dashboard.
+     */
+    if(screenState ==
+       SCREEN_DASHBOARD)
     {
-        screenState = SCREEN_ANIMATING;
-        currentLine = 0;
-        frameActive = 0;
-        lastTick = HAL_GetTick();
+        Screen_ProcessDashboard();
+        return;
     }
 
-    /*  Animation process */
-    if (screenState == SCREEN_ANIMATING)
+    /*
+     * Animation mode.
+     */
+    if(screenState ==
+       SCREEN_ANIMATING)
     {
-        uint32_t now = HAL_GetTick();
-        uint32_t dt = now - lastTick;
-        lastTick = now;
-
-        frameTimer += dt;
-
-        /* === New screen by timer === */
-        if (!frameInProgress)
-        {
-            if (frameTimer >= FRAME_PERIOD_MS)
-            {
-                frameTimer -= FRAME_PERIOD_MS;
-
-                Animation_Update(FRAME_PERIOD_MS);
-
-                currentLine = 0;
-                frameInProgress = 1;
-            }
-            else
-            {
-                return;  // waiting next tick
-            }
-        }
-
-        /* === Paint 1 line for 1 cycle === */
-        Animation_RenderLine(currentLine, lineBuffer);
-        ILI9341_WriteLine(currentLine, lineBuffer);
-
-        currentLine++;
-
-        if (currentLine >= LCD_HEIGHT)
-        {
-            frameInProgress = 0;
-        }
+        Screen_ProcessAnimation();
     }
 }
-

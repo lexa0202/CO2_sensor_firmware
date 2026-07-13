@@ -66,4 +66,13 @@ void RingGauge_DrawTextLine(
     const char* valueText
 );
 
+/*
+ * Get current marker position on the gauge arc.
+ */
+void RingGauge_GetMarkerPosition(
+    const RingGauge_t* gauge,
+    int16_t* markerX,
+    int16_t* markerY
+);
+
 #endif /* RING_GAUGE_H */

@@ -215,6 +215,45 @@ static float RingGauge_PercentToAngle(
         );
 }
 
+void RingGauge_GetMarkerPosition(
+    const RingGauge_t* gauge,
+    int16_t* markerX,
+    int16_t* markerY
+)
+{
+    const float percent =
+        RingGauge_NormalizeValue(
+            gauge
+        );
+
+    const float markerAngle =
+        RingGauge_PercentToAngle(
+            percent
+        );
+
+    const float markerRad =
+        (markerAngle - 90.0f) *
+        DEG_TO_RAD;
+
+    const float markerRadiusPos =
+        gauge->radius -
+        gauge->thickness / 2.0f;
+
+    *markerX =
+        gauge->centerX +
+        (int16_t)(
+            markerRadiusPos *
+            cosf(markerRad)
+        );
+
+    *markerY =
+        gauge->centerY -
+        (int16_t)(
+            markerRadiusPos *
+            sinf(markerRad)
+        );
+}
+
 /******************************************************************************
  * Public functions
  *****************************************************************************/

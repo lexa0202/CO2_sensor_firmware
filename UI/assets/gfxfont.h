@@ -57,27 +57,45 @@ typedef struct
  */
 typedef struct
 {
+    uint16_t first;
+    uint16_t last;
+
+    const GFXglyph* glyph;
+
+} FontRange_t;
+
+
+typedef struct
+{
     /*
-     * Bitmap data for all glyphs.
+     * Bitmap data.
      */
     const uint8_t* bitmap;
 
     /*
-     * Glyph table.
+     * Primary glyph table (ASCII).
      */
     const GFXglyph* glyph;
 
     /*
-     * First and last supported ASCII characters.
+     * Primary character range.
      */
     uint8_t first;
     uint8_t last;
 
     /*
-     * Recommended line spacing.
+     * Line spacing.
      */
     uint8_t yAdvance;
 
+    /*
+     * Optional additional Unicode ranges.
+     */
+    const FontRange_t* ranges;
+
+    uint8_t rangeCount;
+
 } GFXfont;
+
 
 #endif /* GFXFONT_H */

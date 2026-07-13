@@ -2,6 +2,15 @@
 #define SCREEN_DASHBOARD_H
 
 /******************************************************************************
+ * screen_dashboard.h
+ *
+ * Main dashboard screen API.
+ *
+ * Renders the CO2 gauge, animated face and sensor cards.
+ *
+ ******************************************************************************/
+
+/******************************************************************************
  * Includes
  *****************************************************************************/
 
@@ -16,6 +25,8 @@
  *
  * Currently used for CO2 sensor warmup animation.
  */
+void ScreenDashboard_Init(void);
+
 void ScreenDashboard_Update(void);
 
 /*

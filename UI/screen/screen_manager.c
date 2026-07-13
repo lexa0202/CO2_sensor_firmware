@@ -25,8 +25,10 @@
 #include "power_service.h"
 
 #include "screen_dashboard.h"
+#include "screen_boot.h"
 #include "screen_usb.h"
 
+#include "main.h"
 #include "ff.h"
 
 /******************************************************************************
@@ -57,7 +59,7 @@
  *****************************************************************************/
 
 static ScreenState_t screenState =
-    SCREEN_DASHBOARD;
+    SCREEN_BOOT;
 
 static uint8_t defaultImageDrawn =
     0;
@@ -194,6 +196,38 @@ static void Screen_ProcessRaw(void)
 }
 
 /*
+ * Render one boot splash line.
+ */
+static void Screen_ProcessBoot(void)
+{
+    ScreenBoot_RenderLine(
+        currentLine,
+        lineBuffer,
+        LCD_WIDTH
+    );
+
+    ILI9341_WriteLine(
+        currentLine,
+        lineBuffer
+    );
+
+    currentLine++;
+
+    if(currentLine >= LCD_HEIGHT)
+    {
+        currentLine = 0;
+
+        ScreenBoot_Update();
+
+        if(ScreenBoot_IsFinished())
+        {
+            screenState =
+                SCREEN_DASHBOARD;
+        }
+    }
+}
+
+/*
  * Render one dashboard line.
  */
 static void Screen_ProcessDashboard(void)
@@ -282,6 +316,8 @@ static void Screen_ProcessAnimation(void)
 void Screen_Init(void)
 {
     Animation_Init();
+    ScreenDashboard_Init();
+    ScreenBoot_Reset();
 
     lastTick =
         HAL_GetTick();
@@ -299,6 +335,16 @@ void Screen_Init(void)
     ILI9341_Fill(
         COLOR_BLACK
     );
+
+    ScreenBoot_DrawFullFrame();
+
+    ILI9341_DisplayOn();
+
+    HAL_GPIO_WritePin(
+        DISP_LED_GPIO_Port,
+        DISP_LED_Pin,
+        GPIO_PIN_SET
+    );
 }
 
 void Screen_Black(void)
@@ -315,6 +361,26 @@ void Screen_Black(void)
 
     frameInProgress =
         0;
+}
+
+void Screen_ShowBoot(void)
+{
+    screenState =
+        SCREEN_BOOT;
+
+    defaultImageDrawn =
+        1;
+
+    usbScreenDrawn =
+        0;
+
+    frameInProgress =
+        0;
+
+    currentLine =
+        0;
+
+    ScreenBoot_Reset();
 }
 
 void Screen_ShowDefault(void)
@@ -375,28 +441,12 @@ void Screen_Process(void)
     }
 
     /*
-     * Splash image.
-     */
-    if(!defaultImageDrawn)
-    {
-        if(Storage_Service_IsAvailable())
-        {
-            Screen_StartRaw(
-                DEFAULT_IMAGE_FILE
-            );
-
-            defaultImageDrawn =
-                1;
-        }
-    }
-
-    /*
-     * RAW rendering.
+     * Boot splash.
      */
     if(screenState ==
-       SCREEN_DRAWING_RAW)
+       SCREEN_BOOT)
     {
-        Screen_ProcessRaw();
+        Screen_ProcessBoot();
         return;
     }
 

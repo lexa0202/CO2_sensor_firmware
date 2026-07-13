@@ -27,7 +27,15 @@ static void App_EnterState(AppState_t newState)
             break;
 
         case APP_STATE_UI:
-            Screen_ShowDefault();
+            if(previousState ==
+               APP_STATE_USB_MSC)
+            {
+                Screen_ShowDefault();
+            }
+            else
+            {
+                Screen_ShowBoot();
+            }
             break;
 
         case APP_STATE_BOOT:

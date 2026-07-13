@@ -2,6 +2,13 @@
 #define SCREEN_MANAGER_H
 
 /******************************************************************************
+ * screen_manager.h
+ *
+ * Display orchestration and screen state machine.
+ *
+ ******************************************************************************/
+
+/******************************************************************************
  * Types
  *****************************************************************************/
 
@@ -10,6 +17,7 @@
  */
 typedef enum
 {
+    SCREEN_BOOT,
     SCREEN_DRAWING_RAW,
     SCREEN_DASHBOARD,
     SCREEN_ANIMATING,
@@ -30,6 +38,11 @@ void Screen_Init(void);
  * Main screen processing task.
  */
 void Screen_Process(void);
+
+/*
+ * Show boot splash screen.
+ */
+void Screen_ShowBoot(void);
 
 /*
  * Show USB Mass Storage screen.

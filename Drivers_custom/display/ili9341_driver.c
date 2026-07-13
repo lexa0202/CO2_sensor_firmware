@@ -125,9 +125,14 @@ void ILI9341_Init(void)
     LCD_WriteCommand(0x11); // Sleep Out
     HAL_Delay(120);
 
-    LCD_WriteCommand(0x29); // Display ON
-    HAL_Delay(20);
+    LCD_Unselect();
+}
 
+void ILI9341_DisplayOn(void)
+{
+    LCD_Select();
+    LCD_WriteCommand(0x29);
+    HAL_Delay(20);
     LCD_Unselect();
 }
 

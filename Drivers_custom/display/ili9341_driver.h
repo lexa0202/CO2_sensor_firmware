@@ -35,6 +35,7 @@
  *****************************************************************************/
 void LCD_HardwareReset(void);
 void ILI9341_Init(void);
+void ILI9341_DisplayOn(void);
 void ILI9341_WriteLine(uint16_t y, const uint16_t* data);
 void ILI9341_DrawImage(uint16_t x, uint16_t y, uint16_t w, uint16_t h, const uint8_t *data);
 void ILI9341_Fill(uint16_t color);

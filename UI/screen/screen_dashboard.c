@@ -3,16 +3,11 @@
  *
  * Main dashboard screen.
  *
- * Current features:
- * - CO2 circular gauge
- * - warmup animation
- * - sensor status display
- *
- * Planned:
- * - temperature widget
- * - humidity widget
- * - pressure widget
- * - animated face / emotions
+ * Layout:
+ * - CO2 rainbow gauge with marker
+ * - CO2 label, value and ppm unit
+ * - animated face below the gauge text
+ * - temperature / humidity / pressure cards
  *
  ******************************************************************************/
 
@@ -27,83 +22,75 @@
 #include "sensor_model.h"
 #include "ring_gauge.h"
 #include "sensor_card.h"
+#include "face_animation.h"
 
-#include "temp_32.h"
-#include "icon_renderer.h"
+#include "degree.h"
+#include "temp.h"
+#include "humidity.h"
+#include "pressure.h"
+#include "bitmap_renderer.h"
 
 #include "gfx_text_renderer.h"
-#include "FreeSans12pt7b.h"
+
+#include "FreeSans7pt8b.h"
 #include "FreeSans9pt7b.h"
 #include "FreeSansBold12pt7b.h"
-#include "FreeSansOblique12pt7b.h"
-
-
+#include "YandexSansDisplay_Bold12pt7b.h"
+#include "YandexSansDisplay_Bold20pt7b.h"
+#include "YandexSansDisplay_Light12pt7b.h"
+#include "YandexSansDisplay_Light20pt7b.h"
 
 /******************************************************************************
  * Configuration
  *****************************************************************************/
 
-#define DASHBOARD_BG_COLOR       0x0000
-#define DASHBOARD_TEXT_COLOR     0xFFFF
+#define DASHBOARD_BG_COLOR           0x0000
+#define DASHBOARD_TEXT_COLOR         0xFFFF
+
+#define DASHBOARD_CARD_VALUE_FONT    (&YandexSansDisplay_Bold12pt7b)
+#define DASHBOARD_CARD_UNIT_FONT     (&YandexSansDisplay_Light12pt7b)
+#define DASHBOARD_TEXT_BAND_HEIGHT   32
 
 /*
  * Main CO2 gauge position.
  */
-#define CO2_GAUGE_CENTER_X        120
-#define CO2_GAUGE_CENTER_Y        115
+#define CO2_GAUGE_CENTER_X            120
+#define CO2_GAUGE_CENTER_Y            115
 
-#define CO2_GAUGE_RADIUS           95
-#define CO2_GAUGE_THICKNESS         8
-/*
- * CO2 measurement range.
- */
-#define CO2_MIN_PPM              400.0f
-#define CO2_MAX_PPM             2000.0f
+#define CO2_GAUGE_RADIUS               95
+#define CO2_GAUGE_THICKNESS             8
 
-/*
- * Text placement inside gauge.
- */
-#define CO2_LABEL_Y_OFFSET        (-60)
-#define CO2_VALUE_Y_OFFSET        (-25)
-#define CO2_UNIT_Y_OFFSET          5
+#define CO2_MIN_PPM                  400.0f
+#define CO2_MAX_PPM                 2000.0f
 
-/*
- * Warmup animation.
- */
-#define WARMUP_STEP             0.01f
+#define CO2_LABEL_Y_OFFSET            (-60)
+#define CO2_VALUE_Y_OFFSET            (-16)
+#define CO2_UNIT_Y_OFFSET              12
 
-/******************************************************************************
- * Dashboard layout
- *****************************************************************************/
+#define FACE_ORIGIN_X                 120
+#define FACE_ORIGIN_Y                 170
 
-/*
- * Temperature card.
- */
-#define TEMP_CARD_X             10
-#define TEMP_CARD_Y             225
+#define WARMUP_STEP                   0.01f
 
-/*
- * Common card size.
- */
-#define SENSOR_CARD_WIDTH       70
-#define SENSOR_CARD_HEIGHT      90
+#define TEMP_CARD_X                    10
+#define TEMP_CARD_Y                   225
 
-/*
- * Card content layout.
- */
-#define CARD_ICON_OFFSET_Y      8
-#define CARD_VALUE_OFFSET_Y     40
-#define CARD_UNIT_OFFSET_Y      65
+#define HUMIDITY_CARD_X                85
+#define HUMIDITY_CARD_Y               225
 
-/******************************************************************************
- * Temperature card layout
- *****************************************************************************/
+#define PRESSURE_CARD_X               160
+#define PRESSURE_CARD_Y               225
 
-#define TEMP_ICON_Y_OFFSET      8
+#define SENSOR_CARD_WIDTH              70
+#define SENSOR_CARD_HEIGHT             90
 
-#define TEMP_VALUE_Y_OFFSET     48
+#define CARD_ICON_OFFSET_Y              8
+#define CARD_VALUE_OFFSET_Y            50
+#define CARD_UNIT_OFFSET_Y             70
 
-#define TEMP_UNIT_Y_OFFSET      60
+static const char CO2_UNIT_TEXT[] = "ppm";
+static const char WARMUP_TEXT[] = u8"Нагрев:)";
+static const char PRESSURE_UNIT_TEXT[] = u8"мм рт.ст.";
 
 /******************************************************************************
  * Static data
@@ -112,15 +99,20 @@
 static float warmupPosition = 0.0f;
 static int warmupDirection = 1;
 
+static const FaceAnimationConfig_t faceConfig =
+{
+    .originX = FACE_ORIGIN_X,
+    .originY = FACE_ORIGIN_Y,
+    .eyeColor = 0xFFFF,
+    .pupilColor = 0x0000,
+    .highlightColor = 0xFFFF,
+    .mouthColor = 0xFFFF
+};
+
 /******************************************************************************
  * Private functions
  *****************************************************************************/
 
-/*
- * Convert sensor state into display value.
- *
- * During warmup marker moves across the scale.
- */
 static float ScreenDashboard_GetDisplayValue(
     const SensorData_t* data
 )
@@ -147,9 +139,6 @@ static float ScreenDashboard_GetDisplayValue(
     }
 }
 
-/*
- * Convert sensor state into text.
- */
 static const char* ScreenDashboard_GetValueText(
     const SensorData_t* data,
     char* buffer,
@@ -160,7 +149,7 @@ static const char* ScreenDashboard_GetValueText(
     {
     case SENSOR_CO2_STATUS_WARMUP:
 
-        return "WARM";
+        return WARMUP_TEXT;
 
     case SENSOR_CO2_STATUS_OK:
 
@@ -173,23 +162,245 @@ static const char* ScreenDashboard_GetValueText(
 
         return buffer;
 
-    case SENSOR_CO2_STATUS_NO_RESPONSE:
-
-        return "---";
-
-    case SENSOR_CO2_STATUS_OUT_OF_RANGE:
-
-        return "---";
-
     default:
 
         return "---";
     }
 }
 
+static void ScreenDashboard_FormatFloat1(
+    float value,
+    char* text
+)
+{
+    int16_t scaled =
+        (int16_t)(value * 10.0f);
+
+    int16_t integer =
+        scaled / 10;
+
+    int16_t fraction =
+        scaled % 10;
+
+    if(fraction < 0)
+    {
+        fraction = -fraction;
+    }
+
+    snprintf(
+        text,
+        8,
+        "%d.%d",
+        integer,
+        fraction
+    );
+}
+
+static void ScreenDashboard_DrawCenteredTextBand(
+    uint16_t screenY,
+    int16_t bandTopY,
+    uint16_t bandHeight,
+    uint16_t* lineBuffer,
+    uint16_t width,
+    const char* text,
+    const GFXfont* font,
+    uint16_t color
+)
+{
+    if(text == NULL)
+    {
+        return;
+    }
+
+    if(screenY >= bandTopY &&
+       screenY < bandTopY + bandHeight)
+    {
+        const uint16_t textWidth =
+            GFX_GetStringWidth(
+                text,
+                font
+            );
+
+        GFX_DrawStringLine(
+            screenY - bandTopY,
+            lineBuffer,
+            width,
+            text,
+            (width - textWidth) / 2,
+            color,
+            font
+        );
+    }
+}
+
+static void ScreenDashboard_DrawCardValue(
+    uint16_t y,
+    uint16_t* lineBuffer,
+    uint16_t width,
+    const SensorCard_t* card,
+    const char* text
+)
+{
+    const int16_t valueY =
+        card->y +
+        CARD_VALUE_OFFSET_Y;
+
+    const uint16_t textWidth =
+        GFX_GetStringWidth(
+            text,
+            DASHBOARD_CARD_VALUE_FONT
+        );
+
+    const int16_t valueX =
+        card->x +
+        (card->width - textWidth) / 2;
+
+    if(y >= valueY &&
+       y < valueY + DASHBOARD_TEXT_BAND_HEIGHT)
+    {
+        GFX_DrawStringLine(
+            y - valueY,
+            lineBuffer,
+            width,
+            text,
+            valueX,
+            DASHBOARD_TEXT_COLOR,
+            DASHBOARD_CARD_VALUE_FONT
+        );
+    }
+}
+
+static void ScreenDashboard_DrawCardUnit(
+    uint16_t y,
+    uint16_t* lineBuffer,
+    uint16_t width,
+    const SensorCard_t* card,
+    const char* text
+)
+{
+    const int16_t unitY =
+        card->y +
+        CARD_UNIT_OFFSET_Y;
+
+    const uint16_t textWidth =
+        GFX_GetStringWidth(
+            text,
+            DASHBOARD_CARD_UNIT_FONT
+        );
+
+    const int16_t unitX =
+        card->x +
+        (card->width - textWidth) / 2;
+
+    if(y >= unitY &&
+       y < unitY + DASHBOARD_TEXT_BAND_HEIGHT)
+    {
+        GFX_DrawStringLine(
+            y - unitY,
+            lineBuffer,
+            width,
+            text,
+            unitX,
+            DASHBOARD_TEXT_COLOR,
+            DASHBOARD_CARD_UNIT_FONT
+        );
+    }
+}
+
+static void ScreenDashboard_DrawTempUnit(
+    uint16_t y,
+    uint16_t* lineBuffer,
+    uint16_t width,
+    const SensorCard_t* card
+)
+{
+    const int16_t unitY =
+        card->y +
+        CARD_UNIT_OFFSET_Y;
+
+    const char* unit = "C";
+    const int16_t spacing = 1;
+
+    const uint16_t unitWidth =
+        GFX_GetStringWidth(
+            unit,
+            DASHBOARD_CARD_UNIT_FONT
+        );
+
+    const uint16_t groupWidth =
+        BitmapDegree6.width +
+        spacing +
+        unitWidth;
+
+    const int16_t groupX =
+        card->x +
+        (card->width - groupWidth) / 2;
+
+    const int16_t degreeX = groupX;
+    const int16_t unitX =
+        groupX +
+        BitmapDegree6.width +
+        spacing;
+
+    if(y >= unitY &&
+       y < unitY + DASHBOARD_TEXT_BAND_HEIGHT)
+    {
+        GFX_DrawStringLine(
+            y - unitY,
+            lineBuffer,
+            width,
+            unit,
+            unitX,
+            DASHBOARD_TEXT_COLOR,
+            DASHBOARD_CARD_UNIT_FONT
+        );
+    }
+
+    Bitmap_RenderLine(
+        y,
+        lineBuffer,
+        width,
+        degreeX,
+        unitY - 4,
+        &BitmapDegree6,
+        DASHBOARD_TEXT_COLOR
+    );
+}
+
+static void ScreenDashboard_UpdateFace(
+    const SensorData_t* data,
+    const RingGauge_t* gauge
+)
+{
+    int16_t markerX = 0;
+    int16_t markerY = 0;
+
+    RingGauge_GetMarkerPosition(
+        gauge,
+        &markerX,
+        &markerY
+    );
+
+    const FaceAnimationInput_t faceInput =
+    {
+        .co2Status = data->co2_status,
+        .markerX = markerX,
+        .markerY = markerY
+    };
+
+    FaceAnimation_Update(
+        &faceInput
+    );
+}
+
 /******************************************************************************
  * Public functions
  *****************************************************************************/
+
+void ScreenDashboard_Init(void)
+{
+    FaceAnimation_Init();
+}
 
 void ScreenDashboard_Update(void)
 {
@@ -208,55 +419,30 @@ void ScreenDashboard_Update(void)
         warmupPosition = 0.0f;
         warmupDirection = 1;
     }
-}
 
-/******************************************************************************
- * Format temperature without printf float support.
- *
- * Output examples:
- *      24.6
- *      -5.3
- ******************************************************************************/
-static void ScreenDashboard_FormatTemperature(
-    float temperature,
-    char* text
-)
-{
-    /*
-     * BME280 cannot measure outside this range,
-     * but limiting the value also guarantees that
-     * the formatted string always fits into tempText.
-     */
-    if(temperature > 99.9f)
+    const SensorData_t* data =
+        SensorModel_Get();
+
+    const RingGauge_t gauge =
     {
-        temperature = 99.9f;
-    }
+        .centerX = CO2_GAUGE_CENTER_X,
+        .centerY = CO2_GAUGE_CENTER_Y,
+        .radius = CO2_GAUGE_RADIUS,
+        .thickness = CO2_GAUGE_THICKNESS,
+        .value =
+            ScreenDashboard_GetDisplayValue(
+                data
+            ),
+        .minValue = CO2_MIN_PPM,
+        .maxValue = CO2_MAX_PPM,
+        .foregroundColor = 0x07E0,
+        .backgroundColor = 0x39E7,
+        .label = "CO2"
+    };
 
-    if(temperature < -99.9f)
-    {
-        temperature = -99.9f;
-    }
-
-    int16_t value =
-        (int16_t)(temperature * 10.0f);
-
-    int16_t integer =
-        value / 10;
-
-    int16_t fraction =
-        value % 10;
-
-    if(fraction < 0)
-    {
-        fraction = -fraction;
-    }
-
-    snprintf(
-        text,
-        8,
-        "%d.%d",
-        integer,
-        fraction
+    ScreenDashboard_UpdateFace(
+        data,
+        &gauge
     );
 }
 
@@ -326,91 +512,70 @@ void ScreenDashboard_RenderLine(
         );
 
     if(y >= labelY &&
-       y < labelY + 32)
+       y < labelY + GFX_CO2_LABEL_BAND_HEIGHT)
     {
-        uint16_t textWidth =
-            GFX_GetStringWidth(
-                "CO2",
-                &FreeSans12pt7b
-            );
-
-        GFX_DrawStringLine(
+        GFX_DrawCo2LabelLine(
             y - labelY,
             lineBuffer,
             width,
-            "CO2",
-            (width - textWidth) / 2,
+            CO2_GAUGE_CENTER_X,
             DASHBOARD_TEXT_COLOR,
-            &FreeSans12pt7b
+            &FreeSansBold12pt7b,
+            &FreeSans7pt8b
         );
     }
 
-    if(y >= valueY &&
-       y < valueY + 32)
+    if(valueText != NULL)
     {
-        uint16_t textWidth =
-            GFX_GetStringWidth(
-                valueText,
-                &FreeSansBold12pt7b
-            );
+        const GFXfont* valueFont =
+            (data->co2_status ==
+             SENSOR_CO2_STATUS_WARMUP) ?
+            &YandexSansDisplay_Bold20pt7b :
+            &YandexSansDisplay_Bold20pt7b;
 
-        GFX_DrawStringLine(
-            y - valueY,
+        ScreenDashboard_DrawCenteredTextBand(
+            y,
+            valueY,
+            DASHBOARD_TEXT_BAND_HEIGHT,
             lineBuffer,
             width,
             valueText,
-            (width - textWidth) / 2,
-            DASHBOARD_TEXT_COLOR,
-            &FreeSansBold12pt7b
+            valueFont,
+            DASHBOARD_TEXT_COLOR
         );
     }
 
     if(data->co2_status ==
        SENSOR_CO2_STATUS_OK)
     {
-        if(y >= unitY &&
-           y < unitY + 32)
-        {
-            uint16_t textWidth =
-                GFX_GetStringWidth(
-                    "ppm",
-                    &FreeSans9pt7b
-                );
-
-            GFX_DrawStringLine(
-                y - unitY,
-                lineBuffer,
-                width,
-                "ppm",
-                (width - textWidth) / 2,
-                DASHBOARD_TEXT_COLOR,
-                &FreeSans9pt7b
-            );
-        }
+        ScreenDashboard_DrawCenteredTextBand(
+            y,
+            unitY,
+            DASHBOARD_TEXT_BAND_HEIGHT,
+            lineBuffer,
+            width,
+            CO2_UNIT_TEXT,
+            &FreeSans9pt7b,
+            DASHBOARD_TEXT_COLOR
+        );
     }
 
-    /******************************************************************************
-     * Temperature text layout
-     ******************************************************************************/
+    FaceAnimation_RenderLine(
+        y,
+        lineBuffer,
+        width,
+        &faceConfig
+    );
+
     static const SensorCard_t tempCard =
-        {
-            .x = TEMP_CARD_X,
-            .y = TEMP_CARD_Y,
-
-            .width = SENSOR_CARD_WIDTH,
-            .height = SENSOR_CARD_HEIGHT,
-
-            .borderColor = 0x2104,
-            .backgroundColor = 0x2104
-        };
-
-    const int16_t tempValueY =
-        tempCard.y +
-        CARD_VALUE_OFFSET_Y;
-
-    const int16_t tempUnitY =
-        tempCard.y +
-        TEMP_UNIT_Y_OFFSET;
+    {
+        .x = TEMP_CARD_X,
+        .y = TEMP_CARD_Y,
+        .width = SENSOR_CARD_WIDTH,
+        .height = SENSOR_CARD_HEIGHT,
+        .borderColor = 0x2104,
+        .backgroundColor = 0x2104
+    };
 
     SensorCard_RenderLine(
         y,
@@ -419,78 +584,141 @@ void ScreenDashboard_RenderLine(
         &tempCard
     );
 
-    Icon_RenderLine(
+    Bitmap_RenderLine(
         y,
         lineBuffer,
         width,
-
         tempCard.x +
-            (tempCard.width - IconTemp32.width) / 2,
-
-		tempCard.y +
-		CARD_ICON_OFFSET_Y,
-
-        &IconTemp32,
-
+            (tempCard.width - BitmapTemp32.width) / 2,
+        tempCard.y +
+            CARD_ICON_OFFSET_Y,
+        &BitmapTemp32,
         0xFFFF
     );
 
     char tempText[8];
 
-    ScreenDashboard_FormatTemperature(
+    ScreenDashboard_FormatFloat1(
         data->temperature,
         tempText
     );
 
-    uint16_t textWidth =
-        GFX_GetStringWidth(
-            tempText,
-            &FreeSans9pt7b
-        );
+    ScreenDashboard_DrawCardValue(
+        y,
+        lineBuffer,
+        width,
+        &tempCard,
+        tempText
+    );
 
-    int16_t valueX =
-        tempCard.x +
-        (tempCard.width - textWidth) / 2;
+    ScreenDashboard_DrawTempUnit(
+        y,
+        lineBuffer,
+        width,
+        &tempCard
+    );
 
-    if(y >= tempValueY &&
-       y < tempValueY + 32)
+    static const SensorCard_t humidityCard =
     {
-        GFX_DrawStringLine(
-			y - tempValueY,
-            lineBuffer,
-            width,
+        .x = HUMIDITY_CARD_X,
+        .y = HUMIDITY_CARD_Y,
+        .width = SENSOR_CARD_WIDTH,
+        .height = SENSOR_CARD_HEIGHT,
+        .borderColor = 0x2104,
+        .backgroundColor = 0x2104
+    };
 
-            tempText,
+    SensorCard_RenderLine(
+        y,
+        lineBuffer,
+        width,
+        &humidityCard
+    );
 
-            valueX,
+    Bitmap_RenderLine(
+        y,
+        lineBuffer,
+        width,
+        humidityCard.x +
+            (humidityCard.width - BitmapHumidity32.width) / 2,
+        humidityCard.y +
+            CARD_ICON_OFFSET_Y,
+        &BitmapHumidity32,
+        0xFFFF
+    );
 
-            DASHBOARD_TEXT_COLOR,
+    char humidityText[8];
 
-            &FreeSans9pt7b
-        );
-    }
+    ScreenDashboard_FormatFloat1(
+        data->humidity,
+        humidityText
+    );
 
-    if(y >= tempUnitY &&
-       y < tempUnitY + 32)
+    ScreenDashboard_DrawCardValue(
+        y,
+        lineBuffer,
+        width,
+        &humidityCard,
+        humidityText
+    );
+
+    ScreenDashboard_DrawCardUnit(
+        y,
+        lineBuffer,
+        width,
+        &humidityCard,
+        "%"
+    );
+
+    static const SensorCard_t pressureCard =
     {
-        uint16_t textWidth =
-            GFX_GetStringWidth(
-                "°C",
-                &FreeSans9pt7b
-            );
+        .x = PRESSURE_CARD_X,
+        .y = PRESSURE_CARD_Y,
+        .width = SENSOR_CARD_WIDTH,
+        .height = SENSOR_CARD_HEIGHT,
+        .borderColor = 0x2104,
+        .backgroundColor = 0x2104
+    };
 
-        int16_t unitX =
-            tempCard.x +
-            (tempCard.width - textWidth) / 2;
+    SensorCard_RenderLine(
+        y,
+        lineBuffer,
+        width,
+        &pressureCard
+    );
 
-        GFX_DrawStringLine(
-            y - tempUnitY,
-            lineBuffer,
-            width,
-            "°C",
-            unitX,
-            DASHBOARD_TEXT_COLOR,
-            &FreeSans9pt7b
-        );
-    }
+    Bitmap_RenderLine(
+        y,
+        lineBuffer,
+        width,
+        pressureCard.x +
+            (pressureCard.width - BitmapPressure32.width) / 2,
+        pressureCard.y +
+            CARD_ICON_OFFSET_Y,
+        &BitmapPressure32,
+        0xFFFF
+    );
+
+    char pressureText[8];
+
+    ScreenDashboard_FormatFloat1(
+        SensorModel_GetPressureMMHg(),
+        pressureText
+    );
+
+    ScreenDashboard_DrawCardValue(
+        y,
+        lineBuffer,
+        width,
+        &pressureCard,
+        pressureText
+    );
+
+    ScreenDashboard_DrawCardUnit(
+        y,
+        lineBuffer,
+        width,
+        &pressureCard,
+        PRESSURE_UNIT_TEXT
+    );
 }
